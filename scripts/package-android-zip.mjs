@@ -79,6 +79,7 @@ const targets = [
   'public',
   '.github',
   '.npmrc',
+  '.gitattributes',
   '.gitignore',
   'capacitor.config.ts',
   'build-apk.sh',

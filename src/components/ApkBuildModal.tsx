@@ -131,7 +131,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               GitHub Actions Cloud APK Builder Included
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Push this project to GitHub or open <strong>Actions → Build Color Stack 3D Android APK → Run workflow</strong>. GitHub compiles <code className="font-mono text-white">ColorStack3D-debug.apk</code> on Ubuntu (Node 22 + JDK 21 + Android SDK 36) and uploads it under Artifacts.
+              Push this project to GitHub or open <strong>Actions → Build Color Stack 3D Android APK → Run workflow</strong>. It auto-configures Node 22, JDK 21, Android SDK 36, SDK licenses, and <code className="font-mono text-white">local.properties</code>, then uploads <code className="font-mono text-white">ColorStack3D-debug.apk</code> under Artifacts.
             </p>
           </div>
 

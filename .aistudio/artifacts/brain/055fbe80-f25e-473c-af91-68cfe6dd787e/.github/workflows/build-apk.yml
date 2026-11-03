@@ -2,88 +2,75 @@ name: Build Color Stack 3D Android APK
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - 'release/**'
+    branches: [ main, master ]
   workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: android-apk-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
-    name: Assemble Debug APK (AdMob Test Ready)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
 
-      - name: Setup Java JDK 21 (Temurin)
+      - name: Setup Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Accept Android SDK licenses and ensure SDK 36
+      - name: Build web app
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" > /dev/null || true
-
-      - name: Setup Gradle cache
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Install web dependencies, build bundle, and sync Capacitor Android
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund
-          else
-            npm install --legacy-peer-deps --no-audit --no-fund
-          fi
           rm -f public/color-stack-android-apk-project.zip
           npm run build
+
+      - name: Sync Capacitor Android
+        run: |
+          if [ ! -f "android/app/build.gradle" ]; then
+            npx cap add android
+          fi
           npx cap sync android
 
-      - name: Grant execute permission for Gradle wrapper
-        run: chmod +x android/gradlew
-
-      - name: Assemble Android Debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Prepare named APK and publish build summary
+      - name: Configure Android SDK and Gradle wrapper
         run: |
-          APK_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
-          test -f "$APK_SRC"
-          cp "$APK_SRC" ColorStack3D-debug.apk
-          cp "$APK_SRC" android/app/build/outputs/apk/debug/ColorStack3D-debug.apk
-          APK_SIZE=$(du -h ColorStack3D-debug.apk | cut -f1)
-          {
-            echo "### APK Built: ColorStack3D-debug.apk"
-            echo "- **Variant**: Debug APK (install-ready for Android testing)"
-            echo "- **Package ID**: \`com.colorstack3d.game\`"
-            echo "- **AdMob Mode**: Official Google AdMob Test IDs enabled"
-            echo "- **APK Size**: \`${APK_SIZE}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          mkdir -p "$SDK_DIR/licenses"
+          printf "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n859f317696f67ef3d7f30a50a5560e7834b43903\n" > "$SDK_DIR/licenses/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > "$SDK_DIR/licenses/android-sdk-preview-license"
+          printf "sdk.dir=%s\n" "$SDK_DIR" > android/local.properties
+          if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ] && command -v gradle >/dev/null 2>&1; then
+            (cd android && gradle wrapper --gradle-version 8.14.3)
+          fi
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            if (fs.existsSync(p)) {
+              let x = fs.readFileSync(p, "utf8");
+              if (!x.includes("com.google.android.gms.ads.APPLICATION_ID")) {
+                x = x.replace("</application>", "        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"ca-app-pub-3940256099942544~3347511713\" />\n    </application>");
+                fs.writeFileSync(p, x);
+              }
+            }
+          '
 
-      - name: Upload ColorStack3D Debug APK Artifact
+      - name: Build APK
+        run: |
+          sed -i 's/\r$//' android/gradlew
+          chmod +x android/gradlew
+          cd android
+          ./gradlew clean
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ColorStack3D-debug-apk
-          path: ColorStack3D-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          path: android/app/build/outputs/apk/debug/*.apk
