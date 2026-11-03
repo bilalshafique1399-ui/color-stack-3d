@@ -139,6 +139,28 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
   const hydratedSignatureRef = useRef<string>('');
+  const lastProfileUidRef = useRef<string | null>(profile?.uid ?? null);
+
+  // Reset form state cleanly if user signs out or switches Google accounts
+  useEffect(() => {
+    const nextUid = profile?.uid ?? null;
+    if (lastProfileUidRef.current !== nextUid) {
+      lastProfileUidRef.current = nextUid;
+      hydratedSignatureRef.current = '';
+      setPaymentMethod(profile?.savedPayoutMethod ?? 'RedotPay');
+      setAccountNumber(profile?.savedPayoutAccount ?? '');
+      setAccountName(profile?.savedPayoutName ?? '');
+      setIsDirty(false);
+      setFormError(null);
+      setSavedNotice(null);
+      setSubmittedSuccess(false);
+    }
+  }, [
+    profile?.uid,
+    profile?.savedPayoutMethod,
+    profile?.savedPayoutAccount,
+    profile?.savedPayoutName,
+  ]);
 
   // Auto-populate form fields from profile's saved withdrawal preferences when loaded/updated
   useEffect(() => {
@@ -197,12 +219,14 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({
     setSavingPrefs(true);
 
     try {
-      await savePreferredPayoutDetails({
+      const { normalizedAccount, normalizedName } = await savePreferredPayoutDetails({
         profile,
         paymentMethod,
         accountNumber,
         accountName,
       });
+      setAccountNumber(normalizedAccount);
+      setAccountName(normalizedName);
       setIsDirty(false);
       setSavedNotice(
         `Saved ${formatPaymentMethod(paymentMethod)} details to your profile for future withdrawals.`,

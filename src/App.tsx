@@ -58,13 +58,14 @@ import {
 } from './services/globalLeaderboardService';
 import {
   addLocalCoins,
+  applyManualReferralCode,
   capturePendingReferralCodeFromUrl,
   claimDailyBonus,
-  clearLocalCoins,
   convertCoinsToUsd,
   DAILY_REWARD_CENTS,
   DAILY_REWARD_COINS,
   ensureUserProfileOnAuth,
+  flushGuestCoinsToCloud,
   formatCoins,
   formatUsd,
   getLocalCoins,
@@ -199,18 +200,34 @@ export default function App() {
     [showWalletToast],
   );
 
+  const handleApplyRefCode = useCallback((rawCode: string): boolean => {
+    const applied = applyManualReferralCode(rawCode);
+    if (applied) {
+      setPendingRefCode(applied);
+      return true;
+    }
+    return false;
+  }, []);
+
   const navigateTo = useCallback((nextRoute: AppRoute) => {
-    setActiveRoute(nextRoute);
-    if (nextRoute !== 'game') {
-      setPhase('idle');
-      setFeedback(null);
-    }
-    if (typeof window !== 'undefined') {
-      const targetPath = routeToPathname(nextRoute);
-      if (window.location.pathname !== targetPath) {
-        window.history.pushState({}, '', `${targetPath}${window.location.search}`);
+    setActiveRoute((prevRoute) => {
+      if (prevRoute === nextRoute) return prevRoute;
+      if (nextRoute !== 'game') {
+        setPhase('idle');
+        setFeedback(null);
       }
-    }
+      if (typeof window !== 'undefined') {
+        const targetPath = routeToPathname(nextRoute);
+        if (window.location.pathname !== targetPath) {
+          if (nextRoute === 'game') {
+            window.history.replaceState({}, '', `${targetPath}${window.location.search}`);
+          } else {
+            window.history.pushState({}, '', `${targetPath}${window.location.search}`);
+          }
+        }
+      }
+      return nextRoute;
+    });
   }, []);
 
   useEffect(() => {
@@ -297,13 +314,14 @@ export default function App() {
           showDailyRewardToast(bootstrapRes.isNewSignup);
         }
 
-        const pendingGuestCoins = getLocalCoins();
-        if (pendingGuestCoins > 0) {
-          clearLocalCoins();
-          setLocalGuestCoins(0);
-          void syncGameplayCoinsToCloud(
-            pendingGuestCoins,
+        if (getLocalCoins() > 0) {
+          void flushGuestCoinsToCloud(
             bootstrapRes.profile?.updatedAtMs ?? Date.now(),
+            (remaining) => {
+              if (!cancelled) {
+                setLocalGuestCoins(remaining);
+              }
+            },
           ).catch(() => {});
         }
 
@@ -460,7 +478,10 @@ export default function App() {
             void syncGameplayCoinsToCloud(
               finalRunCoins,
               userProfileRef.current?.updatedAtMs ?? 0,
-            ).catch(() => {});
+            ).catch(() => {
+              // Preserve earned coins locally if temporary network/cooldown failure occurs
+              setLocalGuestCoins(addLocalCoins(finalRunCoins));
+            });
           } else {
             setLocalGuestCoins(addLocalCoins(finalRunCoins));
           }
@@ -546,12 +567,8 @@ export default function App() {
     try {
       const user = await signInWithGoogleForLeaderboard();
       if (!user) return;
-      const bootstrapRes = await ensureUserProfileOnAuth(user);
-      setPendingRefCode(null);
-      if (bootstrapRes.claimedDailyBonus) {
-        showDailyRewardToast(bootstrapRes.isNewSignup);
-      }
-
+      // Profile creation, daily bonus toast, and guest coin flush are handled by the
+      // authoritative onAuthStateChanged effect above. Sync personal best score here:
       const bestLocalEntry = highScoreService.getTopScores()[0];
       const bestScoreCandidate = Math.max(score, bestScore, bestLocalEntry?.score ?? 0);
       const bestComboCandidate =
@@ -569,7 +586,7 @@ export default function App() {
     } finally {
       setAuthBusy(false);
     }
-  }, [authBusy, bestScore, lastMaxCombo, score, showDailyRewardToast, syncScoreToCloud]);
+  }, [authBusy, bestScore, lastMaxCombo, score, syncScoreToCloud]);
 
   const handleManualDailyClaim = useCallback(async () => {
     if (!userProfile) return;
@@ -672,6 +689,8 @@ export default function App() {
           user={currentUser}
           profile={userProfile}
           localGuestCoins={localGuestCoins}
+          pendingRefCode={pendingRefCode}
+          onApplyRefCode={handleApplyRefCode}
           invitedFriends={invitedFriends}
           loading={referralLoading}
           error={referralError}

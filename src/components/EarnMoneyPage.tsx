@@ -18,6 +18,7 @@ import {
   buildReferralLink,
   CENTS_PER_EXCHANGE_BUNDLE,
   COINS_PER_EXCHANGE_BUNDLE,
+  copyTextWithFallback,
   DAILY_REWARD_CENTS,
   DAILY_REWARD_COINS,
   formatCoins,
@@ -38,6 +39,8 @@ interface EarnMoneyPageProps {
   user: User | null;
   profile: UserProfile | null;
   localGuestCoins: number;
+  pendingRefCode: string | null;
+  onApplyRefCode: (code: string) => boolean;
   invitedFriends: InvitedFriendEntry[];
   loading: boolean;
   error: string | null;
@@ -54,6 +57,8 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
   user,
   profile,
   localGuestCoins,
+  pendingRefCode,
+  onApplyRefCode,
   invitedFriends,
   loading,
   error,
@@ -68,7 +73,15 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
   const [copied, setCopied] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [convertingCoins, setConvertingCoins] = useState(false);
+  const [manualCodeInput, setManualCodeInput] = useState(() => pendingRefCode ?? '');
+  const [manualCodeMsg, setManualCodeMsg] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (pendingRefCode) {
+      setManualCodeInput(pendingRefCode);
+    }
+  }, [pendingRefCode]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -83,6 +96,7 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
   const coins = profile ? profile.coins : localGuestCoins;
   const myCode = profile?.myCode ?? '------';
   const referralLink = profile ? buildReferralLink(profile.myCode) : '';
+  const isFullUrl = referralLink.startsWith('http://') || referralLink.startsWith('https://');
   const progressRatio = Math.min(1, invitesCount / MIN_INVITES_TO_WITHDRAW);
   const canWithdraw = invitesCount >= MIN_INVITES_TO_WITHDRAW;
   const remainingInvites = Math.max(0, MIN_INVITES_TO_WITHDRAW - invitesCount);
@@ -96,21 +110,26 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
   const convertibleBundles = Math.floor(coins / COINS_PER_EXCHANGE_BUNDLE);
   const convertibleCoins = convertibleBundles * COINS_PER_EXCHANGE_BUNDLE;
   const convertibleCents = convertibleBundles * CENTS_PER_EXCHANGE_BUNDLE;
-  const coinProgressRatio = Math.min(1, (coins % COINS_PER_EXCHANGE_BUNDLE) / COINS_PER_EXCHANGE_BUNDLE);
+  const coinProgressRatio = Math.min(
+    1,
+    (coins % COINS_PER_EXCHANGE_BUNDLE) / COINS_PER_EXCHANGE_BUNDLE,
+  );
 
-  const shareMessage = `Play Color Stack 3D worldwide, collect Gold Coins, and earn USD rewards! Join with my invite link: ${referralLink}`;
+  const shareMessage = isFullUrl
+    ? `Play Color Stack 3D worldwide, collect Gold Coins, and earn USD rewards! Join with my invite link (${myCode}): ${referralLink}`
+    : `Play Color Stack 3D worldwide, collect Gold Coins, and earn USD rewards! Enter my 6-digit invite code before signing in: ${myCode}`;
   const whatsappHref = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
-  const telegramHref = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Play Color Stack 3D worldwide, collect Gold Coins, and earn USD rewards!')}`;
+  const telegramHref = isFullUrl
+    ? `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(`Play Color Stack 3D worldwide! Invite code: ${myCode}`)}`
+    : `https://t.me/share/url?url=${encodeURIComponent('https://play.google.com')}&text=${encodeURIComponent(shareMessage)}`;
 
   const handleCopyLink = async () => {
     if (!referralLink) return;
     soundEngine.playClick();
-    try {
-      await navigator.clipboard.writeText(referralLink);
+    const ok = await copyTextWithFallback(referralLink);
+    if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Ignore clipboard permission errors
     }
   };
 
@@ -193,13 +212,70 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
             <p className="mt-3 text-sm leading-relaxed text-slate-300">
               Sign in with Google to save your 3D gameplay Gold Coins, exchange {COINS_PER_EXCHANGE_BUNDLE} Coins for +{exchangeBundleUsd} USD, invite friends worldwide, and cash out via RedotPay, Binance Pay, USDT (TRC20), or PayPal.
             </p>
+
+            {/* Optional 6-Digit Invite Code Entry (supports Android APK installs without URL params) */}
+            <div className="mt-5 rounded-2xl border border-white/10 bg-[#0D1021] p-3.5 text-left">
+              <label
+                htmlFor="manual-invite-code"
+                className="block text-xs font-semibold text-slate-300"
+              >
+                Have a 6-digit friend invite code? (Optional)
+              </label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <input
+                  id="manual-invite-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="e.g. 482910"
+                  value={manualCodeInput}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setManualCodeInput(digits);
+                    setManualCodeMsg(null);
+                  }}
+                  className="min-h-[42px] flex-1 rounded-xl border border-white/15 bg-[#161B36] px-3 py-2 font-mono text-sm text-white placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none tabular-nums"
+                />
+                <button
+                  type="button"
+                  disabled={manualCodeInput.length !== 6}
+                  onClick={() => {
+                    soundEngine.playClick();
+                    const ok = onApplyRefCode(manualCodeInput);
+                    setManualCodeMsg(
+                      ok
+                        ? `Invite code ${manualCodeInput} saved for first sign-in!`
+                        : 'Enter a valid 6-digit invite code.',
+                    );
+                  }}
+                  className="min-h-[42px] rounded-xl bg-emerald-400/20 border border-emerald-300/30 px-3.5 text-xs font-bold text-emerald-200 hover:bg-emerald-400/30 disabled:opacity-40 whitespace-nowrap shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
+              {(manualCodeMsg || pendingRefCode) && (
+                <p className="mt-1.5 text-[11px] font-medium text-emerald-300 tabular-nums">
+                  {manualCodeMsg ?? `Active invite code: ${pendingRefCode}`}
+                </p>
+              )}
+            </div>
+
+            {error && (
+              <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-200 break-words">
+                {error}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
+                if (manualCodeInput.length === 6 && manualCodeInput !== pendingRefCode) {
+                  onApplyRefCode(manualCodeInput);
+                }
                 soundEngine.playClick();
                 void onGoogleLogin();
               }}
-              className="mt-6 flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-2xl bg-white px-6 py-3 font-display text-base font-extrabold text-slate-950 shadow-lg hover:bg-slate-100 active:scale-[0.98] transition-transform whitespace-nowrap"
+              className="mt-5 flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-2xl bg-white px-6 py-3 font-display text-base font-extrabold text-slate-950 shadow-lg hover:bg-slate-100 active:scale-[0.98] transition-transform whitespace-nowrap"
             >
               <LogIn className="h-5 w-5 shrink-0" />
               <span>Continue with Google</span>
@@ -235,14 +311,14 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
                     htmlFor="my-referral-link"
                     className="block text-xs font-semibold text-slate-300"
                   >
-                    My International Referral Link
+                    {isFullUrl ? 'My International Referral Link' : 'My 6-Digit Invite Code'}
                   </label>
                   <div className="mt-1.5 flex items-center rounded-xl border border-white/15 bg-[#0D1021] px-3.5 py-2.5">
                     <input
                       id="my-referral-link"
                       type="text"
                       readOnly
-                      value={loading && !profile ? 'Generating your referral link...' : referralLink}
+                      value={loading && !profile ? 'Generating your referral code...' : referralLink}
                       className="w-full bg-transparent font-mono text-xs sm:text-sm text-slate-100 focus:outline-none truncate tabular-nums"
                     />
                   </div>
@@ -252,18 +328,20 @@ export const EarnMoneyPage: React.FC<EarnMoneyPageProps> = ({
                     <button
                       type="button"
                       disabled={!profile}
-                      onClick={handleCopyLink}
+                      onClick={() => void handleCopyLink()}
                       className="flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-white/15 active:scale-[0.98] transition-transform disabled:opacity-50 whitespace-nowrap"
                     >
                       {copied ? (
                         <>
                           <Check className="h-4 w-4 shrink-0 text-emerald-400" />
-                          <span className="text-emerald-300">Link Copied!</span>
+                          <span className="text-emerald-300">
+                            {isFullUrl ? 'Link Copied!' : 'Code Copied!'}
+                          </span>
                         </>
                       ) : (
                         <>
                           <Copy className="h-4 w-4 shrink-0" />
-                          <span>Copy Link</span>
+                          <span>{isFullUrl ? 'Copy Link' : 'Copy Code'}</span>
                         </>
                       )}
                     </button>

@@ -5,7 +5,8 @@ import zlib from 'node:zlib';
 /**
  * Pure Node.js ZIP archiver (zero external binary dependencies)
  * Packages the configured Android + Capacitor + Web source into
- * /public/color-stack-android-apk-project.zip for 1-click download.
+ * /public/color-stack-android-apk-project.zip for 1-click download,
+ * preserving Unix execute permissions (+x) on gradlew and build-apk.sh.
  */
 function crc32(buf) {
   let crc = 0xffffffff;
@@ -26,11 +27,16 @@ const EXCLUDED_NAMES = new Set([
   '.gradle',
   '.idea',
   'build',
+  'dist',
+  'dev-dist',
   'local.properties',
   '.DS_Store',
   'Thumbs.db',
   'color-stack-android-apk-project.zip',
+  'ColorStack3D-debug.apk',
 ]);
+
+const EXECUTABLE_PATHS = new Set(['android/gradlew', 'build-apk.sh']);
 
 function addFile(relPath) {
   const fullPath = path.resolve(relPath);
@@ -38,7 +44,12 @@ function addFile(relPath) {
   const stat = fs.statSync(fullPath);
   if (stat.isDirectory()) {
     for (const child of fs.readdirSync(fullPath)) {
-      if (EXCLUDED_NAMES.has(child) || child.endsWith('.iml')) {
+      if (
+        EXCLUDED_NAMES.has(child) ||
+        child.endsWith('.iml') ||
+        child.endsWith('.apk') ||
+        child.endsWith('.aab')
+      ) {
         continue;
       }
       addFile(path.posix.join(relPath, child));
@@ -46,16 +57,19 @@ function addFile(relPath) {
     return;
   }
 
+  const normalizedRel = relPath.replace(/\\/g, '/');
   const rawData = fs.readFileSync(fullPath);
   const compressed = zlib.deflateRawSync(rawData);
   const crc = crc32(rawData);
-  const nameBuf = Buffer.from(relPath.replace(/\\/g, '/'), 'utf8');
+  const nameBuf = Buffer.from(normalizedRel, 'utf8');
+  const isExecutable = EXECUTABLE_PATHS.has(normalizedRel);
 
   entries.push({
     nameBuf,
     rawSize: rawData.length,
     compData: compressed,
     crc,
+    isExecutable,
   });
 }
 
@@ -64,6 +78,8 @@ const targets = [
   'src',
   'public',
   '.github',
+  '.npmrc',
+  '.gitignore',
   'capacitor.config.ts',
   'build-apk.sh',
   'firebase-applet-config.json',
@@ -71,6 +87,7 @@ const targets = [
   'firestore.rules',
   'index.html',
   'package.json',
+  'package-lock.json',
   'tsconfig.json',
   'vite.config.ts',
 ];
@@ -100,9 +117,12 @@ for (const e of entries) {
 
   localParts.push(localHeader, e.compData);
 
+  const unixMode = e.isExecutable ? 0o100755 : 0o100644;
+  const externalAttrs = (unixMode << 16) >>> 0;
+
   const centralHeader = Buffer.alloc(46 + e.nameBuf.length);
   centralHeader.writeUInt32LE(0x02014b50, 0);
-  centralHeader.writeUInt16LE(20, 4);
+  centralHeader.writeUInt16LE((3 << 8) | 20, 4); // Unix (3) + PKZIP 2.0 (20)
   centralHeader.writeUInt16LE(20, 6);
   centralHeader.writeUInt16LE(0, 8);
   centralHeader.writeUInt16LE(8, 10);
@@ -116,7 +136,7 @@ for (const e of entries) {
   centralHeader.writeUInt16LE(0, 32);
   centralHeader.writeUInt16LE(0, 34);
   centralHeader.writeUInt16LE(0, 36);
-  centralHeader.writeUInt32LE(0, 38);
+  centralHeader.writeUInt32LE(externalAttrs, 38);
   centralHeader.writeUInt32LE(offset, 42);
   e.nameBuf.copy(centralHeader, 46);
 

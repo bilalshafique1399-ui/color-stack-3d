@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import type { User } from 'firebase/auth';
 import {
   collection,
@@ -164,22 +165,54 @@ export function getLocalCoins(): number {
   }
 }
 
-export function addLocalCoins(delta: number): number {
-  const safeDelta = Math.max(0, Math.floor(delta));
-  const next = getLocalCoins() + safeDelta;
+export function setLocalCoins(value: number): number {
+  const safeVal = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   try {
-    localStorage.setItem(LOCAL_COINS_STORAGE_KEY, String(next));
+    if (safeVal === 0) {
+      localStorage.removeItem(LOCAL_COINS_STORAGE_KEY);
+    } else {
+      localStorage.setItem(LOCAL_COINS_STORAGE_KEY, String(safeVal));
+    }
   } catch {
     // Ignore storage errors
   }
-  return next;
+  return safeVal;
+}
+
+export function addLocalCoins(delta: number): number {
+  const safeDelta = Math.max(0, Math.floor(delta));
+  return setLocalCoins(getLocalCoins() + safeDelta);
 }
 
 export function clearLocalCoins(): void {
+  setLocalCoins(0);
+}
+
+export async function copyTextWithFallback(text: string): Promise<boolean> {
+  if (!text) return false;
   try {
-    localStorage.removeItem(LOCAL_COINS_STORAGE_KEY);
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
   } catch {
-    // Ignore storage errors
+    // Fall through to execCommand fallback for Android WebView
+  }
+  if (typeof document === 'undefined') return false;
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
   }
 }
 
@@ -254,6 +287,19 @@ export function getPendingReferralCode(): string | null {
   } catch {
     return null;
   }
+}
+
+export function applyManualReferralCode(rawCode: string): string | null {
+  const cleaned = rawCode.trim();
+  if (!CODE_REGEX.test(cleaned)) {
+    return null;
+  }
+  try {
+    localStorage.setItem(PENDING_REF_STORAGE_KEY, cleaned);
+  } catch {
+    // Ignore storage restrictions
+  }
+  return cleaned;
 }
 
 export function clearPendingReferralCode(): void {
@@ -596,7 +642,7 @@ export async function claimDailyBonus(profile: UserProfile): Promise<boolean> {
 
 /**
  * Credits earned 3D Gameplay Gold Coins to the signed-in user's Firestore profile
- * (respecting the 1..250 per-run rule cap and 2s write-rate cooldown).
+ * (respecting the 1..250 per-run rule cap and 2s write-rate cooldown, with 1 retry).
  */
 export async function syncGameplayCoinsToCloud(
   rawCoins: number,
@@ -609,20 +655,65 @@ export async function syncGameplayCoinsToCloud(
   }
 
   const elapsedMs = Date.now() - lastUpdatedAtMs;
-  if (lastUpdatedAtMs > 0 && elapsedMs < 2400) {
-    await new Promise((resolve) => window.setTimeout(resolve, 2400 - elapsedMs));
+  if (lastUpdatedAtMs > 0 && elapsedMs < 2600) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2600 - elapsedMs));
   }
 
   const userPath = `users/${user.uid}`;
-  try {
-    await updateDoc(doc(db, 'users', user.uid), {
-      coins: increment(clamped),
-      updatedAt: serverTimestamp(),
-    });
-    return clamped;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, userPath);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: increment(clamped),
+        updatedAt: serverTimestamp(),
+      });
+      return clamped;
+    } catch (error) {
+      if (attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        continue;
+      }
+      handleFirestoreError(error, OperationType.UPDATE, userPath);
+    }
   }
+  return 0;
+}
+
+let flushingGuestCoinsPromise: Promise<number> | null = null;
+
+/**
+ * Safely flushes locally stored guest coins to Firestore in <=250 chunks,
+ * deducting from localStorage ONLY after each cloud batch succeeds.
+ */
+export async function flushGuestCoinsToCloud(
+  initialLastUpdatedAtMs = 0,
+  onLocalRemainingChange?: (remaining: number) => void,
+): Promise<number> {
+  if (flushingGuestCoinsPromise) {
+    return flushingGuestCoinsPromise;
+  }
+
+  flushingGuestCoinsPromise = (async () => {
+    let totalCredited = 0;
+    let lastWriteMs = initialLastUpdatedAtMs;
+
+    while (auth.currentUser && getLocalCoins() > 0) {
+      const pending = getLocalCoins();
+      const batchSize = Math.min(MAX_GAMEPLAY_COINS_PER_RUN, pending);
+      const credited = await syncGameplayCoinsToCloud(batchSize, lastWriteMs);
+      if (credited <= 0) break;
+
+      totalCredited += credited;
+      lastWriteMs = Date.now();
+      const remaining = setLocalCoins(Math.max(0, getLocalCoins() - credited));
+      onLocalRemainingChange?.(remaining);
+    }
+
+    return totalCredited;
+  })().finally(() => {
+    flushingGuestCoinsPromise = null;
+  });
+
+  return flushingGuestCoinsPromise;
 }
 
 /**
@@ -789,7 +880,7 @@ export async function savePreferredPayoutDetails(params: {
   paymentMethod: PaymentMethod;
   accountNumber: string;
   accountName: string;
-}): Promise<void> {
+}): Promise<{ normalizedAccount: string; normalizedName: string }> {
   const user = auth.currentUser;
   if (!user || !user.email || !user.emailVerified || user.uid !== params.profile.uid) {
     throw new Error('Please sign in with a verified Google account first.');
@@ -805,6 +896,7 @@ export async function savePreferredPayoutDetails(params: {
       savedPayoutName: normalizedName,
       updatedAt: serverTimestamp(),
     });
+    return { normalizedAccount, normalizedName };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, userPath);
   }
@@ -947,8 +1039,24 @@ export async function reviewWithdrawRequest(
 }
 
 export function buildReferralLink(myCode: string): string {
+  const configuredOrigin = (import.meta.env.VITE_PUBLIC_APP_URL ?? '').trim().replace(/\/+$/, '');
+  if (configuredOrigin) {
+    return `${configuredOrigin}/?ref=${myCode}`;
+  }
   if (typeof window === 'undefined') {
-    return `/?ref=${myCode}`;
+    return myCode;
+  }
+  const host = window.location.hostname;
+  if (
+    Capacitor.isNativePlatform() ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    window.location.protocol === 'capacitor:' ||
+    window.location.protocol === 'file:'
+  ) {
+    // Inside native Android WebView (https://localhost), avoid broken localhost links
+    // and return the universal 6-digit invite code directly unless VITE_PUBLIC_APP_URL is set.
+    return myCode;
   }
   return `${window.location.origin}/?ref=${myCode}`;
 }

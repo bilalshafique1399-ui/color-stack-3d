@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, Copy, Download, Smartphone, X } from 'lucide-react';
 import { ADMOB_CONFIG } from '../services/admobService';
+import { copyTextWithFallback } from '../services/referralService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { soundEngine } from '../audio/soundEngine';
 
@@ -13,18 +14,27 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [copiedCmd, setCopiedCmd] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  const buildCommand = 'npm install --legacy-peer-deps && npm run build && npx cap sync android && chmod +x android/gradlew && (cd android && ./gradlew assembleDebug --no-daemon)';
+  const buildCommand = './build-apk.sh';
 
   const handleCopyCommand = async () => {
     soundEngine.playClick();
-    try {
-      await navigator.clipboard.writeText(buildCommand);
+    const ok = await copyTextWithFallback(buildCommand);
+    if (ok) {
       setCopiedCmd(true);
       window.setTimeout(() => setCopiedCmd(false), 2000);
-    } catch {
-      // Ignore clipboard failures
     }
   };
 
@@ -40,7 +50,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
       <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-white/15 bg-[#141830] p-6 text-white shadow-2xl">
         <div className="flex items-center justify-between gap-4">
           <h2 className="font-display text-xl font-bold tracking-tight">
-            Android APK & Mobile Setup
+            Android APK &amp; Mobile Setup
           </h2>
           <button
             type="button"
@@ -56,7 +66,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
         </div>
 
         <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-          This project includes a native Capacitor Android project pre-wired with Google AdMob SDK, portrait lock, and your Test Ad Unit IDs.
+          This project includes a native Capacitor Android project pre-wired with Google AdMob SDK, portrait lock, and official Google Test Ad Unit IDs.
         </p>
 
         {/* Primary Action 1: Download Pre-Configured Android Studio / Gradle APK Project */}
@@ -77,7 +87,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               type="button"
               onClick={() => {
                 soundEngine.playClick();
-                install();
+                void install();
               }}
               className="flex min-h-[48px] w-full items-center justify-center gap-2.5 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15 transition-transform active:scale-[0.98] whitespace-nowrap"
             >
@@ -121,20 +131,24 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               GitHub Actions Cloud APK Builder Included
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Push this project to GitHub or click <strong>Actions → Build Color Stack 3D Android APK → Run workflow</strong>. GitHub compiles <code className="font-mono text-white">ColorStack3D-debug.apk</code> on Ubuntu (Node 22 + JDK 21) and uploads it under Artifacts.
+              Push this project to GitHub or open <strong>Actions → Build Color Stack 3D Android APK → Run workflow</strong>. GitHub compiles <code className="font-mono text-white">ColorStack3D-debug.apk</code> on Ubuntu (Node 22 + JDK 21 + Android SDK 36) and uploads it under Artifacts.
             </p>
           </div>
 
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-200">
-              Local Terminal Build Command
+              One-Step Local APK Build Script
             </span>
             <button
               type="button"
-              onClick={handleCopyCommand}
+              onClick={() => void handleCopyCommand()}
               className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/15 whitespace-nowrap shrink-0"
             >
-              {copiedCmd ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedCmd ? (
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
               <span>{copiedCmd ? 'Copied' : 'Copy Cmd'}</span>
             </button>
           </div>
@@ -142,7 +156,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
             {buildCommand}
           </pre>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Output APK: <code className="font-mono text-slate-200">android/app/build/outputs/apk/debug/ColorStack3D-debug.apk</code>. Once verified on your phone, replace the Test AdMob IDs in <code className="font-mono text-slate-200">strings.xml</code> and <code className="font-mono text-slate-200">admobService.ts</code> with your live AdMob IDs.
+            Output APK: <code className="font-mono text-slate-200">./ColorStack3D-debug.apk</code>. Once verified on your phone, replace the Test AdMob IDs in <code className="font-mono text-slate-200">strings.xml</code> and <code className="font-mono text-slate-200">admobService.ts</code> with your live AdMob IDs.
           </p>
         </div>
       </div>

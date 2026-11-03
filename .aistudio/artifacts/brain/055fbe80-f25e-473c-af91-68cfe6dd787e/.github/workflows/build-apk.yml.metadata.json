@@ -1,5 +1,5 @@
 {
-  "summary": "GitHub Actions workflow (.github/workflows/build-apk.yml) to compile the Color Stack 3D Android Debug APK on Ubuntu using Node.js 22, Temurin JDK 21, Android SDK, and Gradle caching, uploading ColorStack3D-debug-apk as a downloadable build artifact.",
-  "updatedAt": "2026-11-03T07:24:18.736736762Z",
+  "summary": "Hardened GitHub Actions workflow (.github/workflows/build-apk.yml) to assemble ColorStack3D-debug.apk on Ubuntu with Node 22, Temurin JDK 21, Android SDK 36, Gradle v4 cache, safe SDK license acceptance, resilient npm ci/install, and artifact upload on push or manual dispatch.",
+  "updatedAt": "2026-11-03T09:07:25.555189682Z",
   "userFacing": true
 }

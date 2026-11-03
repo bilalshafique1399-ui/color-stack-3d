@@ -190,6 +190,7 @@ export class StackTowerEngine {
 
   private clock = new THREE.Clock();
   private frameId = 0;
+  private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
 
   constructor(container: HTMLElement, callbacks: GameCallbacks) {
@@ -338,6 +339,12 @@ export class StackTowerEngine {
     }
 
     window.addEventListener('resize', this.handleResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.handleResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
     this.renderer.domElement.addEventListener('webglcontextlost', this.handleContextLost);
     this.renderer.domElement.addEventListener('webglcontextrestored', this.handleContextRestored);
 
@@ -1254,6 +1261,10 @@ export class StackTowerEngine {
     window.cancelAnimationFrame(this.frameId);
     window.clearTimeout(this.frameId);
     window.removeEventListener('resize', this.handleResize);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     this.renderer.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
     this.renderer.domElement.removeEventListener(
       'webglcontextrestored',
