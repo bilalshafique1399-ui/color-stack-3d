@@ -1,0 +1,6 @@
+{
+  "name": "Color Stack 3D",
+  "description": "A vibrant 3D isometric block-stacking arcade game with perfect-drop combos, harmonic audio feedback, and AdMob integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

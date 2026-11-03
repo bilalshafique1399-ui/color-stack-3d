@@ -1,0 +1,585 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1 & Phase 4.1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives (Phase 3)
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidReferralCodeId(code) {
+      return code is string && code.size() == 6 && code.matches('^[0-9]{6}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAuth() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isVerifiedUser(uid) {
+      return isVerifiedAuth() && request.auth.uid == uid;
+    }
+
+    // Bootstrapped Verified Admin (Zero DB read overhead; email_verified blocks spoofing)
+    function isAdmin() {
+      return isVerifiedAuth()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() <= 254
+        && request.auth.token.email == 'bilalshafique1399@gmail.com';
+    }
+
+    // =========================================================================
+    // 1. Top 100 Global Leaderboard (/globalScores/{userId}) — Zero PII
+    // =========================================================================
+    function isValidGlobalScore(data) {
+      return isSignedIn()
+        && data.keys().hasAll(['userId', 'displayName', 'score', 'maxCombo', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'displayName', 'score', 'maxCombo', 'createdAt', 'updatedAt'])
+        && data.userId is string
+        && data.userId.size() >= 1
+        && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 32
+        && data.displayName.matches('^[a-zA-Z0-9 _.\\-]+$')
+        && data.score is int
+        && data.score >= 1
+        && data.score <= 1000000
+        && data.maxCombo is int
+        && data.maxCombo >= 0
+        && data.maxCombo <= 10000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isPersonalBestUpgrade() {
+      return incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && (
+          incoming().score > existing().score
+          || (incoming().score == existing().score && incoming().maxCombo >= existing().maxCombo)
+        );
+    }
+
+    match /globalScores/{userId} {
+      allow get: if isValidId(userId)
+        && (resource == null || existing().score > 0);
+
+      allow list: if existing().score > 0
+        && request.query.limit != null
+        && request.query.limit <= 100;
+
+      allow create: if isVerifiedUser(userId)
+        && isValidId(userId)
+        && isValidGlobalScore(incoming())
+        && incoming().createdAt == request.time;
+
+      allow update: if (
+        isSignedIn()
+        && isValidGlobalScore(incoming())
+        && isVerifiedUser(userId)
+        && isValidId(userId)
+        && (
+          isPersonalBestUpgrade()
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'score', 'maxCombo', 'updatedAt'])
+        )
+      );
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 2. Private User Profile, USD Wallet & Gold Coins (/users/{uid}) — PII Isolated
+    // =========================================================================
+    function isValidAccountForProvider(method, acc) {
+      return method == 'USDT_TRC20'
+        ? (acc.size() == 34 && acc.matches('^T[1-9A-HJ-NP-Za-km-z]{33}$'))
+        : (
+          method == 'PayPal'
+            ? (acc.size() >= 6 && acc.size() <= 120 && acc.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'))
+            : (
+              (method == 'RedotPay' || method == 'BinancePay')
+                ? (acc.size() >= 6 && acc.size() <= 120 && acc.matches('^[a-zA-Z0-9+@._\\-]{6,120}$'))
+                : (acc.size() >= 10 && acc.size() <= 15 && acc.matches('^[0-9+]{10,15}$'))
+            )
+        );
+    }
+
+    function hasValidSavedPayoutFields(data) {
+      return (
+        !('savedPayoutMethod' in data)
+        && !('savedPayoutAccount' in data)
+        && !('savedPayoutName' in data)
+      ) || (
+        ('savedPayoutMethod' in data)
+        && ('savedPayoutAccount' in data)
+        && ('savedPayoutName' in data)
+        && data.savedPayoutMethod is string
+        && data.savedPayoutMethod.size() >= 6
+        && data.savedPayoutMethod.size() <= 10
+        && (
+          data.savedPayoutMethod == 'RedotPay'
+          || data.savedPayoutMethod == 'BinancePay'
+          || data.savedPayoutMethod == 'USDT_TRC20'
+          || data.savedPayoutMethod == 'PayPal'
+          || data.savedPayoutMethod == 'JazzCash'
+          || data.savedPayoutMethod == 'Easypaisa'
+        )
+        && data.savedPayoutAccount is string
+        && data.savedPayoutAccount.size() >= 6
+        && data.savedPayoutAccount.size() <= 120
+        && data.savedPayoutAccount.matches('^[a-zA-Z0-9+@._\\-]{6,120}$')
+        && isValidAccountForProvider(data.savedPayoutMethod, data.savedPayoutAccount)
+        && data.savedPayoutName is string
+        && data.savedPayoutName.size() >= 2
+        && data.savedPayoutName.size() <= 60
+        && data.savedPayoutName.matches('^[a-zA-Z0-9 _.\\-]+$')
+      );
+    }
+
+    function isValidUserProfile(data, pathUid) {
+      return isSignedIn()
+        && data.keys().hasAll(['uid', 'email', 'displayName', 'myCode', 'invitesCount', 'balance', 'referredBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'myCode', 'invitesCount', 'balance', 'coins', 'referredBy', 'lastDailyRewardAt', 'savedPayoutMethod', 'savedPayoutAccount', 'savedPayoutName', 'createdAt', 'updatedAt'])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == pathUid
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 32
+        && data.displayName.matches('^[a-zA-Z0-9 _.\\-]+$')
+        && data.myCode is string
+        && data.myCode.size() == 6
+        && data.myCode.matches('^[0-9]{6}$')
+        && data.invitesCount is int
+        && data.invitesCount >= 0
+        && data.invitesCount <= 1000000
+        && data.balance is int
+        && data.balance >= 0
+        && data.balance <= 20000000
+        && (!('coins' in data) || (data.coins is int && data.coins >= 0 && data.coins <= 50000000))
+        && data.referredBy is string
+        && data.referredBy.size() >= 0
+        && data.referredBy.size() <= 6
+        && data.referredBy.matches('^([0-9]{6})?$')
+        && (!('lastDailyRewardAt' in data) || data.lastDailyRewardAt is timestamp)
+        && hasValidSavedPayoutFields(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function existingCoins() {
+      return ('coins' in existing()) ? existing().coins : 0;
+    }
+
+    function incomingCoins() {
+      return ('coins' in incoming()) ? incoming().coins : 0;
+    }
+
+    function hasUnchangedCoins() {
+      return !('coins' in existing())
+        ? !('coins' in incoming())
+        : ('coins' in incoming() && incoming().coins == existing().coins);
+    }
+
+    function hasImmutableUserCore() {
+      return incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().myCode == existing().myCode
+        && incoming().referredBy == existing().referredBy
+        && incoming().createdAt == existing().createdAt;
+    }
+
+    function hasUnchangedDailyRewardTimestamp() {
+      return !('lastDailyRewardAt' in existing())
+        ? !('lastDailyRewardAt' in incoming())
+        : ('lastDailyRewardAt' in incoming() && incoming().lastDailyRewardAt == existing().lastDailyRewardAt);
+    }
+
+    // Action 1 (Owner): Claim 24-hour Daily Sign-In Bonus (+$0.05 = +5 cents & +50 Coins)
+    function isDailyRewardClaimAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && incoming().displayName == existing().displayName
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().balance == existing().balance + 5
+        && (
+          incomingCoins() == existingCoins() + 50
+          || incomingCoins() == existingCoins()
+        )
+        && ('lastDailyRewardAt' in incoming())
+        && incoming().lastDailyRewardAt == request.time
+        && (
+          !('lastDailyRewardAt' in existing())
+          || request.time >= existing().lastDailyRewardAt + duration.value(24, 'h')
+        )
+        && incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'coins', 'lastDailyRewardAt', 'updatedAt']);
+    }
+
+    // Action 2 (Owner): Sync earned 3D Gameplay Coins at end of run (bounded 1..250 per run, rate-limited)
+    function isGameplayCoinSyncAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && incoming().displayName == existing().displayName
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().balance == existing().balance
+        && ('coins' in incoming())
+        && incomingCoins() >= existingCoins() + 1
+        && incomingCoins() <= existingCoins() + 250
+        && request.time >= existing().updatedAt + duration.value(2, 's')
+        && incoming().diff(existing()).affectedKeys().hasOnly(['coins', 'updatedAt']);
+    }
+
+    // Action 3 (Owner): Atomic Coin-to-USD Conversion (500 Coins = $0.05 = 5 cents)
+    function isConvertCoinsAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && incoming().displayName == existing().displayName
+        && incoming().invitesCount == existing().invitesCount
+        && ('coins' in existing())
+        && ('coins' in incoming())
+        && existing().coins >= 500
+        && incoming().coins >= 0
+        && incoming().coins < existing().coins
+        && (existing().coins - incoming().coins) % 500 == 0
+        && incoming().balance == existing().balance + ((existing().coins - incoming().coins) / 100)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'coins', 'updatedAt']);
+    }
+
+    // Action 4 (Owner): Refresh displayName only
+    function isOwnerProfileSyncAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && hasUnchangedCoins()
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().balance == existing().balance
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+    }
+
+    // Action 4B (Owner): Save or clear preferred withdrawal payout details in profile
+    function isSavePayoutPreferencesAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && hasUnchangedCoins()
+        && incoming().displayName == existing().displayName
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().balance == existing().balance
+        && incoming().diff(existing()).affectedKeys().hasOnly(['savedPayoutMethod', 'savedPayoutAccount', 'savedPayoutName', 'updatedAt']);
+    }
+
+    // Action 5 (Owner): Atomic USD balance deduction on withdrawal when invitesCount >= 50 (with optional preferred payout save)
+    function isOwnerWithdrawDeductAction(uid) {
+      return isVerifiedUser(uid)
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && hasUnchangedCoins()
+        && incoming().displayName == existing().displayName
+        && existing().invitesCount >= 50
+        && existing().balance >= 5
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().balance == 0
+        && incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'savedPayoutMethod', 'savedPayoutAccount', 'savedPayoutName', 'updatedAt']);
+    }
+
+    // Action 6 (Tier 2 Referral Credit): Single-use +1 invite, +$0.20 (+20 cents) & +100 Coins during new friend signup batch
+    function isReferralCreditAction(referrerUid) {
+      return isVerifiedAuth()
+        && request.auth.uid != referrerUid
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && incoming().displayName == existing().displayName
+        && incoming().invitesCount == existing().invitesCount + 1
+        && incoming().balance == existing().balance + 20
+        && (
+          incomingCoins() == existingCoins() + 100
+          || incomingCoins() == existingCoins()
+        )
+        && incoming().diff(existing()).affectedKeys().hasOnly(['invitesCount', 'balance', 'coins', 'updatedAt'])
+        && !exists(/databases/$(database)/documents/referrals/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/referrals/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/referrals/$(request.auth.uid)).data.referrerUid == referrerUid;
+    }
+
+    // Action 7 (Admin Refund / Adjustment)
+    function isAdminWalletAdjustAction() {
+      return isAdmin()
+        && hasImmutableUserCore()
+        && hasUnchangedDailyRewardTimestamp()
+        && incoming().displayName == existing().displayName
+        && incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'coins', 'invitesCount', 'updatedAt']);
+    }
+
+    match /users/{uid} {
+      // Pillar 6: PII (email) strictly restricted to owner or admin
+      allow get: if isValidId(uid) && (isVerifiedUser(uid) || isAdmin());
+
+      allow list: if isAdmin()
+        && request.query.limit != null
+        && request.query.limit <= 100;
+
+      allow create: if isVerifiedUser(uid)
+        && isValidId(uid)
+        && isValidUserProfile(incoming(), uid)
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && incoming().invitesCount == 0
+        && !('savedPayoutMethod' in incoming())
+        && (
+          (incoming().balance == 5 && (incomingCoins() == 50 || incomingCoins() == 0) && ('lastDailyRewardAt' in incoming()) && incoming().lastDailyRewardAt == request.time)
+          || (incoming().balance == 0 && incomingCoins() == 0 && !('lastDailyRewardAt' in incoming()))
+        )
+        && incoming().createdAt == request.time
+        && existsAfter(/databases/$(database)/documents/referralCodes/$(incoming().myCode))
+        && (
+          incoming().referredBy == ''
+          || existsAfter(/databases/$(database)/documents/referrals/$(uid))
+        );
+
+      allow update: if (
+        isSignedIn()
+        && isValidUserProfile(incoming(), uid)
+        && isValidId(uid)
+        && (
+          isDailyRewardClaimAction(uid)
+          || isGameplayCoinSyncAction(uid)
+          || isConvertCoinsAction(uid)
+          || isOwnerProfileSyncAction(uid)
+          || isSavePayoutPreferencesAction(uid)
+          || isOwnerWithdrawDeductAction(uid)
+          || isReferralCreditAction(uid)
+          || isAdminWalletAdjustAction()
+        )
+      );
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 3. Public 6-Digit Referral Code Directory (/referralCodes/{code}) — Zero PII
+    // =========================================================================
+    function isValidReferralCodeDoc(data, pathCode) {
+      return isSignedIn()
+        && data.keys().hasAll(['code', 'ownerUid', 'ownerName', 'createdAt'])
+        && data.keys().hasOnly(['code', 'ownerUid', 'ownerName', 'createdAt'])
+        && data.code is string
+        && data.code.size() == 6
+        && data.code.matches('^[0-9]{6}$')
+        && data.code == pathCode
+        && data.ownerUid is string
+        && data.ownerUid.size() >= 1
+        && data.ownerUid.size() <= 128
+        && data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.ownerUid == request.auth.uid
+        && data.ownerName is string
+        && data.ownerName.size() >= 1
+        && data.ownerName.size() <= 32
+        && data.ownerName.matches('^[a-zA-Z0-9 _.\\-]+$')
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    match /referralCodes/{code} {
+      allow get: if isSignedIn() && isValidReferralCodeId(code);
+      allow list: if false;
+
+      allow create: if isVerifiedAuth()
+        && isValidReferralCodeId(code)
+        && isValidReferralCodeDoc(incoming(), code)
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.myCode == code;
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // 4. Immutable Invited Friends Ledger (/referrals/{invitedUid}) — Zero PII
+    // =========================================================================
+    function isValidReferralRecord(data, pathInvitedUid) {
+      return isSignedIn()
+        && data.keys().hasAll(['invitedUid', 'invitedName', 'referrerUid', 'referralCode', 'rewardCents', 'createdAt'])
+        && data.keys().hasOnly(['invitedUid', 'invitedName', 'referrerUid', 'referralCode', 'rewardCents', 'rewardCoins', 'createdAt'])
+        && data.invitedUid is string
+        && data.invitedUid.size() >= 1
+        && data.invitedUid.size() <= 128
+        && data.invitedUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.invitedUid == pathInvitedUid
+        && data.invitedUid == request.auth.uid
+        && data.invitedName is string
+        && data.invitedName.size() >= 1
+        && data.invitedName.size() <= 32
+        && data.invitedName.matches('^[a-zA-Z0-9 _.\\-]+$')
+        && data.referrerUid is string
+        && data.referrerUid.size() >= 1
+        && data.referrerUid.size() <= 128
+        && data.referrerUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.referrerUid != request.auth.uid
+        && data.referralCode is string
+        && data.referralCode.size() == 6
+        && data.referralCode.matches('^[0-9]{6}$')
+        && data.rewardCents is int
+        && data.rewardCents == 20
+        && (!('rewardCoins' in data) || (data.rewardCoins is int && data.rewardCoins == 100))
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    match /referrals/{invitedUid} {
+      allow get: if isValidId(invitedUid)
+        && isSignedIn()
+        && (
+          request.auth.uid == invitedUid
+          || (resource != null && existing().referrerUid == request.auth.uid)
+          || isAdmin()
+        );
+
+      allow list: if isSignedIn()
+        && (existing().referrerUid == request.auth.uid || isAdmin())
+        && request.query.limit != null
+        && request.query.limit <= 100;
+
+      allow create: if isVerifiedUser(invitedUid)
+        && isValidId(invitedUid)
+        && isValidReferralRecord(incoming(), invitedUid)
+        && !exists(/databases/$(database)/documents/users/$(invitedUid))
+        && existsAfter(/databases/$(database)/documents/users/$(invitedUid))
+        && getAfter(/databases/$(database)/documents/users/$(invitedUid)).data.referredBy == incoming().referralCode
+        && exists(/databases/$(database)/documents/referralCodes/$(incoming().referralCode))
+        && get(/databases/$(database)/documents/referralCodes/$(incoming().referralCode)).data.ownerUid == incoming().referrerUid;
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // 5. International Withdraw Requests (/withdrawRequests/{requestId}) — PII Isolated
+    // =========================================================================
+    function isValidWithdrawRequest(data, pathReqId) {
+      return isSignedIn()
+        && data.keys().hasAll(['requestId', 'uid', 'email', 'invitesCount', 'amount', 'paymentMethod', 'accountNumber', 'accountName', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['requestId', 'uid', 'email', 'invitesCount', 'amount', 'paymentMethod', 'accountNumber', 'accountName', 'status', 'createdAt', 'updatedAt'])
+        && data.requestId is string
+        && data.requestId.size() >= 1
+        && data.requestId.size() <= 128
+        && data.requestId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.requestId == pathReqId
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && data.invitesCount is int
+        && data.invitesCount >= 50
+        && data.invitesCount <= 1000000
+        && data.amount is int
+        && data.amount >= 5
+        && data.amount <= 20000000
+        && data.paymentMethod is string
+        && data.paymentMethod.size() >= 6
+        && data.paymentMethod.size() <= 10
+        && (
+          data.paymentMethod == 'RedotPay'
+          || data.paymentMethod == 'BinancePay'
+          || data.paymentMethod == 'USDT_TRC20'
+          || data.paymentMethod == 'PayPal'
+          || data.paymentMethod == 'JazzCash'
+          || data.paymentMethod == 'Easypaisa'
+        )
+        && data.accountNumber is string
+        && data.accountNumber.size() >= 6
+        && data.accountNumber.size() <= 120
+        && data.accountNumber.matches('^[a-zA-Z0-9+@._\\-]{6,120}$')
+        && isValidAccountForProvider(data.paymentMethod, data.accountNumber)
+        && data.accountName is string
+        && data.accountName.size() >= 2
+        && data.accountName.size() <= 60
+        && data.accountName.matches('^[a-zA-Z0-9 _.\\-]+$')
+        && data.status is string
+        && data.status.size() >= 7
+        && data.status.size() <= 8
+        && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected')
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    match /withdrawRequests/{requestId} {
+      allow get: if isValidId(requestId)
+        && isSignedIn()
+        && (
+          (resource != null && existing().uid == request.auth.uid)
+          || isAdmin()
+        );
+
+      allow list: if isSignedIn()
+        && (existing().uid == request.auth.uid || isAdmin())
+        && request.query.limit != null
+        && request.query.limit <= 100;
+
+      allow create: if isVerifiedAuth()
+        && isValidId(requestId)
+        && isValidWithdrawRequest(incoming(), requestId)
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && incoming().status == 'pending'
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.invitesCount >= 50
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.invitesCount == incoming().invitesCount
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.balance == incoming().amount
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.balance == 0;
+
+      allow update: if (
+        isSignedIn()
+        && isValidWithdrawRequest(incoming(), requestId)
+        && isValidId(requestId)
+        && isAdmin()
+        && (existing().status == 'pending' || isAdmin())
+        && incoming().requestId == existing().requestId
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().invitesCount == existing().invitesCount
+        && incoming().amount == existing().amount
+        && incoming().paymentMethod == existing().paymentMethod
+        && incoming().accountNumber == existing().accountNumber
+        && incoming().accountName == existing().accountName
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+      );
+
+      allow delete: if false;
+    }
+  }
+}

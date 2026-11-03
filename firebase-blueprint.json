@@ -1,0 +1,358 @@
+{
+  "entities": {
+    "GlobalScore": {
+      "title": "GlobalScore",
+      "description": "Personal best global leaderboard entry for an authenticated player.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player who achieved the score.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Sanitized public leaderboard display name (no PII or email).",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "score": {
+          "type": "integer",
+          "description": "Player's highest stacked tower score (positive integer)."
+        },
+        "maxCombo": {
+          "type": "integer",
+          "description": "Highest perfect-drop streak achieved on the best score run."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player first posted to the global leaderboard."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player last beat their personal best."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "score",
+        "maxCombo",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "International user account, 6-digit referral code, invite counter, USD balance (in cents), collectible game coins, and 24-hour daily sign-in reward tracker.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address (PII restricted to owner and admin).",
+          "minLength": 3,
+          "maxLength": 254,
+          "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Sanitized player display name.",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "myCode": {
+          "type": "string",
+          "description": "Unique 6-digit numeric referral code generated on signup.",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[0-9]{6}$"
+        },
+        "invitesCount": {
+          "type": "integer",
+          "description": "Total number of verified new signups referred by myCode."
+        },
+        "balance": {
+          "type": "integer",
+          "description": "Current withdrawable wallet balance in USD cents (5 = $0.05 daily bonus, 20 = $0.20 per invite)."
+        },
+        "coins": {
+          "type": "integer",
+          "description": "In-game Gold Coins earned from 3D block drops, coin pickups, daily bonuses, and referrals (500 Coins = $0.05 USD)."
+        },
+        "referredBy": {
+          "type": "string",
+          "description": "6-digit referral code used at signup, or empty string if organic.",
+          "minLength": 0,
+          "maxLength": 6,
+          "pattern": "^([0-9]{6})?$"
+        },
+        "lastDailyRewardAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the user last claimed their 24-hour daily sign-in bonus."
+        },
+        "savedPayoutMethod": {
+          "type": "string",
+          "description": "User's saved preferred payout method so they do not have to re-enter it on every withdrawal.",
+          "enum": ["RedotPay", "BinancePay", "USDT_TRC20", "PayPal", "JazzCash", "Easypaisa"],
+          "minLength": 6,
+          "maxLength": 10
+        },
+        "savedPayoutAccount": {
+          "type": "string",
+          "description": "User's saved preferred payout account ID, email, wallet address, or mobile wallet number (PII isolated to owner and admin).",
+          "minLength": 6,
+          "maxLength": 120,
+          "pattern": "^[a-zA-Z0-9+@._\\-]{6,120}$"
+        },
+        "savedPayoutName": {
+          "type": "string",
+          "description": "User's saved preferred payout account holder full name.",
+          "minLength": 2,
+          "maxLength": 60,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of initial signup."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest wallet or profile update."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "myCode",
+        "invitesCount",
+        "balance",
+        "referredBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReferralCode": {
+      "title": "ReferralCode",
+      "description": "Public non-PII lookup record mapping a 6-digit referral code to its owner UID.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "6-digit numeric referral code (matches document ID).",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[0-9]{6}$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "UID of the user who owns this referral code.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "Sanitized public name of the referrer.",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the code was registered."
+        }
+      },
+      "required": [
+        "code",
+        "ownerUid",
+        "ownerName",
+        "createdAt"
+      ]
+    },
+    "ReferralRecord": {
+      "title": "ReferralRecord",
+      "description": "Immutable record of an invited friend credited to a referrer in USD cents and Gold Coins.",
+      "type": "object",
+      "properties": {
+        "invitedUid": {
+          "type": "string",
+          "description": "UID of the newly signed-up friend (matches document ID).",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "invitedName": {
+          "type": "string",
+          "description": "Sanitized public display name of the invited friend.",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "referrerUid": {
+          "type": "string",
+          "description": "UID of the referrer receiving +1 invite, +$0.20 (20 cents), and +100 Coins.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "referralCode": {
+          "type": "string",
+          "description": "6-digit referral code redeemed on signup.",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[0-9]{6}$"
+        },
+        "rewardCents": {
+          "type": "integer",
+          "description": "Fixed referral reward in USD cents (20 = $0.20)."
+        },
+        "rewardCoins": {
+          "type": "integer",
+          "description": "Fixed referral bonus in Gold Coins (100 Coins)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the referral was completed."
+        }
+      },
+      "required": [
+        "invitedUid",
+        "invitedName",
+        "referrerUid",
+        "referralCode",
+        "rewardCents",
+        "createdAt"
+      ]
+    },
+    "WithdrawRequest": {
+      "title": "WithdrawRequest",
+      "description": "International USD payout request via RedotPay, Binance Pay, USDT (TRC20), or PayPal once invitesCount >= 50.",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Document ID of the withdraw request.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "uid": {
+          "type": "string",
+          "description": "UID of the requesting user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified email of the requesting user (visible only to owner and admin).",
+          "minLength": 3,
+          "maxLength": 254,
+          "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+        },
+        "invitesCount": {
+          "type": "integer",
+          "description": "Verified invites count at time of withdrawal (must be >= 50)."
+        },
+        "amount": {
+          "type": "integer",
+          "description": "Requested payout amount in USD cents."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "International payout rail selected by user (RedotPay, BinancePay, USDT_TRC20, PayPal, or legacy mobile wallets).",
+          "enum": ["RedotPay", "BinancePay", "USDT_TRC20", "PayPal", "JazzCash", "Easypaisa"],
+          "minLength": 6,
+          "maxLength": 10
+        },
+        "accountNumber": {
+          "type": "string",
+          "description": "RedotPay/Binance Pay UID or email, TRC20 wallet address, or PayPal email.",
+          "minLength": 6,
+          "maxLength": 120,
+          "pattern": "^[a-zA-Z0-9+@._\\-]{6,120}$"
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Account holder full name.",
+          "minLength": 2,
+          "maxLength": 60,
+          "pattern": "^[a-zA-Z0-9 _.\\-]+$"
+        },
+        "status": {
+          "type": "string",
+          "description": "Review state of the payout request.",
+          "enum": ["pending", "approved", "rejected"],
+          "minLength": 7,
+          "maxLength": 8
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when withdrawal was requested."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest status update."
+        }
+      },
+      "required": [
+        "requestId",
+        "uid",
+        "email",
+        "invitesCount",
+        "amount",
+        "paymentMethod",
+        "accountNumber",
+        "accountName",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/globalScores/{userId}": {
+      "schema": "GlobalScore",
+      "description": "Global Top 100 leaderboard storing one personal-best score document per authenticated user."
+    },
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "Private user account, USD wallet balance (cents), Gold Coins, and 24h daily reward timestamp isolated to owner and admin."
+    },
+    "/referralCodes/{code}": {
+      "schema": "ReferralCode",
+      "description": "Public non-PII 6-digit referral code lookup mapping code to ownerUid."
+    },
+    "/referrals/{invitedUid}": {
+      "schema": "ReferralRecord",
+      "description": "Immutable invited-friends ledger keyed by invitedUid."
+    },
+    "/withdrawRequests/{requestId}": {
+      "schema": "WithdrawRequest",
+      "description": "International USD payout requests via RedotPay, Binance Pay, USDT (TRC20), or PayPal for users with >= 50 invites."
+    }
+  }
+}

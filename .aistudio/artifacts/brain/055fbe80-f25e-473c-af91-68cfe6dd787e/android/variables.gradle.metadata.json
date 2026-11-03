@@ -1,0 +1,5 @@
+{
+  "summary": "Android SDK and AndroidX version targets (android/variables.gradle) targeting minSdk 24 and compileSdk/targetSdk 36 for Capacitor 8.",
+  "updatedAt": "2026-11-03T07:26:31.251344116Z",
+  "userFacing": true
+}

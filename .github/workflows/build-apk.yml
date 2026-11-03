@@ -1,0 +1,81 @@
+name: Build Color Stack 3D Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'release/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug-apk:
+    name: Assemble Debug APK (AdMob Test Ready)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install web dependencies, build bundle, and sync Capacitor Android
+        run: |
+          npm install --legacy-peer-deps --no-audit --no-fund
+          rm -f public/color-stack-android-apk-project.zip
+          npm run build
+          npx cap sync android
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x android/gradlew
+
+      - name: Assemble Android Debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare named APK and publish build summary
+        run: |
+          APK_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_NAMED="android/app/build/outputs/apk/debug/ColorStack3D-debug.apk"
+          test -f "$APK_SRC"
+          cp "$APK_SRC" "$APK_NAMED"
+          APK_SIZE=$(du -h "$APK_NAMED" | cut -f1)
+          echo "### Color Stack 3D — Debug APK Built Successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Variant**: Debug APK (install-ready for Android testing)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Package ID**: \`com.colorstack3d.game\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **AdMob Mode**: Official Google AdMob Test IDs enabled" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **APK Size**: \`${APK_SIZE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ColorStack3D Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ColorStack3D-debug-apk
+          path: android/app/build/outputs/apk/debug/ColorStack3D-debug.apk
+          if-no-files-found: error
+          retention-days: 30
