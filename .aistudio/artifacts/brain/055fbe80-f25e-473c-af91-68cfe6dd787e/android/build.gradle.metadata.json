@@ -1,5 +1,5 @@
 {
-  "summary": "Root Android Gradle build configuration (android/build.gradle) using Android Gradle Plugin 8.13.0 and Google Services 4.4.4.",
-  "updatedAt": "2026-11-03T07:26:30.897769431Z",
+  "summary": "Top-level Android Gradle configuration using Android Gradle Plugin 8.5.2.",
+  "updatedAt": "2026-11-03T17:05:40.751066225Z",
   "userFacing": true
 }

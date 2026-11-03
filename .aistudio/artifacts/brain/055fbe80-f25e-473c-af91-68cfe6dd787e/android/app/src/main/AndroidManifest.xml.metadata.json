@@ -1,5 +1,5 @@
 {
-  "summary": "AndroidManifest.xml configured with GPU hardware acceleration, portrait screen lock, Google AdMob Test App ID meta-data, and INTERNET, VIBRATE, and AD_ID permissions.",
-  "updatedAt": "2026-11-03T07:26:24.940360794Z",
+  "summary": "AndroidManifest.xml configured with live Google AdMob APPLICATION_ID (`ca-app-pub-8318388001860392~8689085671`), portrait orientation, AppCompat NoActionBar theme, and required AdMob/network permissions.",
+  "updatedAt": "2026-11-03T17:05:33.582858665Z",
   "userFacing": true
 }

@@ -1,5 +1,5 @@
 {
-  "summary": "Capacitor Android project file synced for Color Stack 3D (app/src/main/res/layout/activity_main.xml)",
-  "userFacing": true,
-  "requestFeedback": false
+  "summary": "Main activity layout with gameWebView positioned above bottom AdMob Banner AdView (`ca-app-pub-8318388001860392/4000077808`).",
+  "updatedAt": "2026-11-03T17:05:39.018864537Z",
+  "userFacing": true
 }

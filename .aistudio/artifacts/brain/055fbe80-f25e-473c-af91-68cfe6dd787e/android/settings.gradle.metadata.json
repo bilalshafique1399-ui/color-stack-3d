@@ -1,5 +1,5 @@
 {
-  "summary": "Capacitor Android project file synced for Color Stack 3D (settings.gradle)",
-  "userFacing": true,
-  "requestFeedback": false
+  "summary": "Standalone Gradle settings.gradle including only :app module.",
+  "updatedAt": "2026-11-03T17:05:42.542583917Z",
+  "userFacing": true
 }

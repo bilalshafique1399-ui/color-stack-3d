@@ -1,5 +1,5 @@
 {
-  "summary": "Capacitor Android project file synced for Color Stack 3D (app/src/main/java/com/colorstack3d/game/MainActivity.java)",
-  "userFacing": true,
-  "requestFeedback": false
+  "summary": "MainActivity.java with live AdMob Banner (`ca-app-pub-8318388001860392/4000077808`), Interstitial (`ca-app-pub-8318388001860392/3808506117` preloaded at start & reloaded on close, triggered every 3 games via `Android.showInterstitial()`), App Open (`ca-app-pub-8318388001860392/6741791216`), and local APK asset WebView serving.",
+  "updatedAt": "2026-11-03T17:05:37.274138850Z",
+  "userFacing": true
 }

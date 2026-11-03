@@ -1,5 +1,5 @@
 {
-  "summary": "Capacitor Android project file synced for Color Stack 3D (app/src/main/res/values/styles.xml)",
-  "userFacing": true,
-  "requestFeedback": false
+  "summary": "AppTheme extending Theme.AppCompat.NoActionBar for MainActivity.",
+  "updatedAt": "2026-11-03T17:05:45.157356719Z",
+  "userFacing": true
 }

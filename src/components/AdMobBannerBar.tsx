@@ -5,13 +5,9 @@ export const AdMobBannerBar: React.FC = () => {
   const isNative = admobService.isNative();
 
   if (isNative) {
-    // Native Capacitor AdMob renders the OS-level Adaptive Banner (ADMOB_CONFIG.BANNER_AD_ID) over this bottom slot
-    return (
-      <div
-        className="h-[56px] w-full shrink-0 bg-[#0D1021] pb-[env(safe-area-inset-bottom)]"
-        aria-hidden="true"
-      />
-    );
+    // In native Android APK, activity_main.xml already places gameWebView above @+id/bannerAd (AdView),
+    // so no extra web spacer is needed inside the WebView!
+    return null;
   }
 
   return (
@@ -25,13 +21,13 @@ export const AdMobBannerBar: React.FC = () => {
     >
       <div className="flex h-[50px] w-full max-w-[320px] items-center justify-between bg-[#1B2038] px-3">
         <span className="shrink-0 rounded-sm bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
-          Test Ad
+          AdMob
         </span>
         <span className="truncate px-2 text-xs font-medium text-slate-100">
-          Nice job! This is a 320x50 test ad.
+          Banner Slot Ready (320×50)
         </span>
         <span className="shrink-0 text-[10px] font-semibold text-sky-300">
-          AdMob
+          Live ID
         </span>
       </div>
     </div>

@@ -172,7 +172,6 @@ export default function App() {
   currentUserRef.current = currentUser;
   const userProfileRef = useRef<UserProfile | null>(null);
   userProfileRef.current = userProfile;
-  const interstitialTimerRef = useRef<number | null>(null);
   const dailyNoticeTimerRef = useRef<number | null>(null);
   const modalOpenRef = useRef(false);
   modalOpenRef.current = showInterstitial || showApkModal;
@@ -238,12 +237,6 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const clearPendingInterstitialTimer = useCallback(() => {
-    if (interstitialTimerRef.current !== null) {
-      window.clearTimeout(interstitialTimerRef.current);
-      interstitialTimerRef.current = null;
-    }
-  }, []);
 
   const syncScoreToCloud = useCallback(async (candidateScore: number, candidateCombo: number) => {
     if (candidateScore < 1) return;
@@ -265,9 +258,12 @@ export default function App() {
     }
   }, []);
 
-  // Initialize AdMob Banner once on app boot
+  // Initialize AdMob Banner + preload first Interstitial once on app boot
   useEffect(() => {
-    admobService.initializeAndShowBanner().catch(() => {});
+    admobService
+      .initializeAndShowBanner()
+      .then(() => admobService.preloadInterstitial())
+      .catch(() => {});
   }, []);
 
   // Track Firebase Auth state & bootstrap /users/{uid} + ?ref=CODE referral credit on signup
@@ -493,15 +489,9 @@ export default function App() {
           finalScore >= localBest ? maxCombo : localBestCombo,
         );
 
-        const result = await admobService.recordGameOverAndMaybeShowInterstitial();
+        const result = await admobService.gameOver();
         if (result.showWebSimulation) {
-          clearPendingInterstitialTimer();
-          interstitialTimerRef.current = window.setTimeout(() => {
-            interstitialTimerRef.current = null;
-            if (phaseRef.current === 'gameover') {
-              setShowInterstitial(true);
-            }
-          }, 450);
+          setShowInterstitial(true);
         }
       },
     });
@@ -509,17 +499,16 @@ export default function App() {
     engineRef.current = engine;
 
     return () => {
-      clearPendingInterstitialTimer();
       engine.dispose();
       engineRef.current = null;
     };
-  }, [activeRoute, clearPendingInterstitialTimer, syncScoreToCloud]);
+  }, [activeRoute, syncScoreToCloud]);
 
   const startFreshRun = useCallback(() => {
-    clearPendingInterstitialTimer();
     soundEngine.playClick();
+    void admobService.preloadInterstitial();
     engineRef.current?.startNewGame();
-  }, [clearPendingInterstitialTimer]);
+  }, []);
 
   // Keyboard accessibility (Space / Enter to drop or restart when on Game route)
   useEffect(() => {
@@ -731,9 +720,16 @@ export default function App() {
           <div className="pointer-events-none relative z-10 mx-auto flex h-full w-full max-w-lg flex-col justify-between px-4 sm:px-5 pt-4 pb-5">
             {/* Top Bar: Brand + Earn Money / Utility Controls */}
             <header className="pointer-events-auto flex items-center justify-between gap-2">
-              <span className="font-display text-lg font-extrabold tracking-tight text-white drop-shadow whitespace-nowrap shrink-0">
-                Color Stack
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <img
+                  src="./pwa-192x192.png"
+                  alt="Color Stack 3D"
+                  className="h-8 w-8 rounded-lg object-cover shadow-md border border-white/15 shrink-0"
+                />
+                <span className="font-display text-lg font-extrabold tracking-tight text-white drop-shadow whitespace-nowrap shrink-0">
+                  Color Stack
+                </span>
+              </div>
 
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {isUserAdmin(currentUser) && (
@@ -825,8 +821,13 @@ export default function App() {
             <div className="relative mt-1 flex flex-col items-center text-center">
               {phase === 'idle' ? (
                 <div className="flex flex-col items-center">
-                  <h1 className="font-display text-5xl sm:text-6xl font-extrabold tracking-tight text-white drop-shadow-md [text-wrap:balance]">
-                    Color Stack
+                  <img
+                    src="./pwa-512x512.png"
+                    alt="Color Stack 3D"
+                    className="mb-2.5 h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover shadow-2xl border border-white/20"
+                  />
+                  <h1 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md [text-wrap:balance]">
+                    Color Stack 3D
                   </h1>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs sm:text-sm font-medium text-slate-200/90 tabular-nums">
                     <span className={tierColorClass(levelInfo.tier)}>
@@ -1296,7 +1297,10 @@ export default function App() {
       {/* AdMob Test Interstitial Modal (ca-app-pub-3940256099942544/1033173712 after every 3 game overs) */}
       <AdMobInterstitialModal
         isOpen={showInterstitial}
-        onClose={() => setShowInterstitial(false)}
+        onClose={() => {
+          setShowInterstitial(false);
+          admobService.handleWebInterstitialDismissed();
+        }}
       />
 
       {/* Android APK Project Download & Setup Modal */}

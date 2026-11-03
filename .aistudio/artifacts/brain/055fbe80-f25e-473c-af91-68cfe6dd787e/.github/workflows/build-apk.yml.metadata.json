@@ -1,5 +1,5 @@
 {
-  "summary": "Streamlined GitHub Actions workflow (.github/workflows/build-apk.yml) using actions/checkout@v4, setup-node@v4 (Node 22), setup-java@v4 (Temurin JDK 21), Android SDK license & local.properties setup, gradlew clean, gradlew assembleDebug, and upload-artifact@v4.",
-  "updatedAt": "2026-11-03T10:45:20.383619472Z",
+  "summary": "GitHub Actions workflow (`Build APK`) configured to build web assets, compile the standalone Android SDK 34 + AdMob 22.6.0 Debug APK using Zulu JDK 17 and Gradle 8.7, and upload `ColorStack3D-APK-RealAds`.",
+  "updatedAt": "2026-11-03T17:05:09.946800230Z",
   "userFacing": true
 }

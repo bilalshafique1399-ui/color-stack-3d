@@ -4,5 +4,8 @@
     <string name="title_activity_main">Color Stack 3D</string>
     <string name="package_name">com.colorstack3d.game</string>
     <string name="custom_url_scheme">com.colorstack3d.game</string>
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+    <string name="admob_app_id">ca-app-pub-8318388001860392~8689085671</string>
+    <string name="admob_banner_id">ca-app-pub-8318388001860392/4000077808</string>
+    <string name="admob_interstitial_id">ca-app-pub-8318388001860392/3808506117</string>
+    <string name="admob_app_open_id">ca-app-pub-8318388001860392/6741791216</string>
 </resources>

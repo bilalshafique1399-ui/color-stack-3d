@@ -4,6 +4,7 @@ import { getAtmosphereColors, getBlockColor } from './colorPalette';
 import { soundEngine } from '../audio/soundEngine';
 import { hapticEngine } from '../audio/hapticEngine';
 import { highScoreService } from '../services/highScoreService';
+import { admobService } from '../services/admobService';
 
 export type GamePhase = 'idle' | 'playing' | 'gameover';
 
@@ -593,6 +594,7 @@ export class StackTowerEngine {
     soundEngine.unlock();
     hapticEngine.stop();
     hapticEngine.vibrateTap();
+    void admobService.preloadInterstitial();
     this.setupInitialTower();
     this.phase = 'playing';
     this.callbacks.onPhaseChange('playing');

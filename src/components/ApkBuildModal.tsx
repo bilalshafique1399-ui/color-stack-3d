@@ -66,7 +66,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
         </div>
 
         <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-          This project includes a native Capacitor Android project pre-wired with Google AdMob SDK, portrait lock, and official Google Test Ad Unit IDs.
+          This project includes a standalone Android project (SDK 34, AdMob 22.6.0) pre-wired with portrait lock and your live AdMob App, Banner, Interstitial (every 3 games), and App Open IDs.
         </p>
 
         {/* Primary Action 1: Download Pre-Configured Android Studio / Gradle APK Project */}
@@ -106,10 +106,16 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
         {/* Configured AdMob IDs Summary */}
         <div className="mt-6 space-y-2.5 border-t border-white/10 pt-5">
           <div className="text-xs font-semibold text-slate-200">
-            Configured Google AdMob Test IDs
+            Configured Live Google AdMob IDs
           </div>
           <div className="rounded-xl border border-white/10 bg-[#0D1021] p-3 text-xs space-y-2">
             <div>
+              <div className="text-slate-400">App ID (AndroidManifest.xml)</div>
+              <div className="font-mono text-[11px] text-amber-300 break-all tabular-nums">
+                {ADMOB_CONFIG.APP_ID_ANDROID}
+              </div>
+            </div>
+            <div className="border-t border-white/5 pt-2">
               <div className="text-slate-400">Banner Ad (Bottom Always)</div>
               <div className="font-mono text-[11px] text-sky-300 break-all tabular-nums">
                 {ADMOB_CONFIG.BANNER_AD_ID}
@@ -119,6 +125,12 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               <div className="text-slate-400">Interstitial Ad (Every 3 Game Overs)</div>
               <div className="font-mono text-[11px] text-emerald-300 break-all tabular-nums">
                 {ADMOB_CONFIG.INTERSTITIAL_AD_ID}
+              </div>
+            </div>
+            <div className="border-t border-white/5 pt-2">
+              <div className="text-slate-400">App Open Ad (Launch &amp; Resume)</div>
+              <div className="font-mono text-[11px] text-violet-300 break-all tabular-nums">
+                {ADMOB_CONFIG.APP_OPEN_AD_ID}
               </div>
             </div>
           </div>
@@ -131,7 +143,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               GitHub Actions Cloud APK Builder Included
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Push this project to GitHub or open <strong>Actions → Build Color Stack 3D Android APK → Run workflow</strong>. It auto-configures Node 22, JDK 21, Android SDK 36, SDK licenses, and <code className="font-mono text-white">local.properties</code>, then uploads <code className="font-mono text-white">ColorStack3D-debug.apk</code> under Artifacts.
+              Push this project to GitHub or open <strong>Actions → Build APK → Run workflow</strong>. It builds the web assets, runs Gradle <code className="font-mono text-white">assembleDebug</code> with JDK 17 &amp; SDK 34, and uploads <code className="font-mono text-white">ColorStack3D-APK-RealAds</code> under Artifacts.
             </p>
           </div>
 
@@ -156,7 +168,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
             {buildCommand}
           </pre>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Output APK: <code className="font-mono text-slate-200">./ColorStack3D-debug.apk</code>. Once verified on your phone, replace the Test AdMob IDs in <code className="font-mono text-slate-200">strings.xml</code> and <code className="font-mono text-slate-200">admobService.ts</code> with your live AdMob IDs.
+            Output APK: <code className="font-mono text-slate-200">./ColorStack3D-APK-RealAds.apk</code> with all live AdMob IDs pre-configured in <code className="font-mono text-slate-200">AndroidManifest.xml</code>, <code className="font-mono text-slate-200">activity_main.xml</code>, and <code className="font-mono text-slate-200">MainActivity.java</code>.
           </p>
         </div>
       </div>

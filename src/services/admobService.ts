@@ -1,132 +1,186 @@
 import { Capacitor } from '@capacitor/core';
-import {
-  AdMob,
-  BannerAdOptions,
-  BannerAdPosition,
-  BannerAdSize,
-  AdOptions,
-} from '@capacitor-community/admob';
+
+interface AndroidAdBridge {
+  showInterstitial?: () => void;
+  preloadInterstitial?: () => void;
+  isNativeAndroid?: () => boolean;
+}
+
+declare global {
+  interface Window {
+    Android?: AndroidAdBridge;
+  }
+}
 
 /**
- * Official Google AdMob Test Ad Unit IDs specified in project requirements:
- * - Banner Ad ID: ca-app-pub-3940256099942544/6300978111 (shown at bottom always)
- * - Interstitial Ad ID: ca-app-pub-3940256099942544/1033173712 (shown after every 3 game overs)
+ * Final Live Google AdMob Ad Unit IDs:
+ * - App ID: ca-app-pub-8318388001860392~8689085671
+ * - Banner Ad ID: ca-app-pub-8318388001860392/4000077808 (native AdView at bottom in activity_main.xml)
+ * - Interstitial Ad ID: ca-app-pub-8318388001860392/3808506117 (shown after every 3 completed games via Android.showInterstitial())
+ * - App Open Ad ID: ca-app-pub-8318388001860392/6741791216 (loaded & shown in MainActivity.java)
  */
 export const ADMOB_CONFIG = {
-  APP_ID_ANDROID: 'ca-app-pub-3940256099942544~3347511713',
-  BANNER_AD_ID: 'ca-app-pub-3940256099942544/6300978111',
-  INTERSTITIAL_AD_ID: 'ca-app-pub-3940256099942544/1033173712',
-  INTERSTITIAL_FREQUENCY: 3, // Show after every 3 game overs
+  APP_ID_ANDROID: 'ca-app-pub-8318388001860392~8689085671',
+  BANNER_AD_ID: 'ca-app-pub-8318388001860392/4000077808',
+  INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/3808506117',
+  APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/6741791216',
+  INTERSTITIAL_FREQUENCY: 3, // Show after every 3 completed games
 } as const;
 
+const GAMES_PLAYED_STORAGE_KEY = 'gamesPlayed';
+
+function loadGamesPlayedFromStorage(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(GAMES_PLAYED_STORAGE_KEY);
+    if (!raw) return 0;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveGamesPlayedToStorage(count: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GAMES_PLAYED_STORAGE_KEY, String(count));
+  } catch {
+    // Ignore private-mode storage errors
+  }
+}
+
+let gamesPlayed: number = loadGamesPlayedFromStorage();
+
+export function getGamesPlayed(): number {
+  gamesPlayed = loadGamesPlayedFromStorage() || gamesPlayed;
+  return gamesPlayed;
+}
+
+export function incrementGamesPlayed(): number {
+  const persisted = loadGamesPlayedFromStorage();
+  if (persisted > gamesPlayed) {
+    gamesPlayed = persisted;
+  }
+  gamesPlayed += 1;
+  saveGamesPlayedToStorage(gamesPlayed);
+  return gamesPlayed;
+}
+
 class AdMobManager {
-  private initialized = false;
-  private interstitialReady = false;
-  private gameOverCount = 0;
+  public hasAndroidBridge(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.Android !== 'undefined' &&
+      typeof window.Android.showInterstitial === 'function'
+    );
+  }
 
   public isNative(): boolean {
-    return Capacitor.isNativePlatform();
+    return this.hasAndroidBridge() || Capacitor.isNativePlatform();
   }
 
   public getGameOverCount(): number {
-    return this.gameOverCount;
+    return getGamesPlayed();
   }
 
   public async initializeAndShowBanner(): Promise<void> {
-    if (!this.isNative()) {
-      // On web preview, the persistent bottom AdMob Test Banner UI renders directly in React
-      this.initialized = true;
-      return;
-    }
-
-    if (this.initialized) return;
-
-    try {
-      await AdMob.initialize({
-        initializeForTesting: true,
-      });
-      this.initialized = true;
-
-      const bannerOptions: BannerAdOptions = {
-        adId: ADMOB_CONFIG.BANNER_AD_ID,
-        adSize: BannerAdSize.ADAPTIVE_BANNER,
-        position: BannerAdPosition.BOTTOM_CENTER,
-        margin: 0,
-        isTesting: true,
-      };
-
-      await AdMob.showBanner(bannerOptions);
-      await this.preloadInterstitial();
-    } catch (err) {
-      console.warn('AdMob initialization skipped or failed:', err);
+    // On Android APK, Banner + AppOpen + Interstitial preload run natively in MainActivity.java
+    if (this.hasAndroidBridge()) {
+      window.Android?.preloadInterstitial?.();
     }
   }
 
-  public async preloadInterstitial(): Promise<void> {
-    if (!this.isNative()) return;
-
-    try {
-      const options: AdOptions = {
-        adId: ADMOB_CONFIG.INTERSTITIAL_AD_ID,
-        isTesting: true,
-      };
-      await AdMob.prepareInterstitial(options);
-      this.interstitialReady = true;
-    } catch (err) {
-      this.interstitialReady = false;
-      console.warn('AdMob interstitial preload failed:', err);
+  public async preloadInterstitial(): Promise<boolean> {
+    if (this.hasAndroidBridge()) {
+      try {
+        window.Android?.preloadInterstitial?.();
+      } catch {
+        // Ignore bridge errors
+      }
     }
+    return true;
+  }
+
+  public handleWebInterstitialDismissed(): void {
+    void this.preloadInterstitial();
   }
 
   /**
-   * Increments Game Over counter and triggers Interstitial Ad every 3rd game over.
-   * Returns true if a Web Test Interstitial overlay should be displayed in browser preview.
+   * Calls native Android.showInterstitial() when running inside the Android APK,
+   * or triggers the web simulation modal when previewing in browser.
    */
+  public async showInterstitialAd(): Promise<{
+    triggeredInterstitial: boolean;
+    showWebSimulation: boolean;
+  }> {
+    if (this.hasAndroidBridge()) {
+      try {
+        window.Android?.showInterstitial?.();
+        return {
+          triggeredInterstitial: true,
+          showWebSimulation: false,
+        };
+      } catch (err) {
+        console.warn('Android.showInterstitial() failed:', err);
+        return {
+          triggeredInterstitial: false,
+          showWebSimulation: false,
+        };
+      }
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      return {
+        triggeredInterstitial: false,
+        showWebSimulation: false,
+      };
+    }
+
+    return {
+      triggeredInterstitial: true,
+      showWebSimulation: true,
+    };
+  }
+
+  /**
+   * Increments persistent gamesPlayed counter (saved in localStorage) and triggers
+   * Interstitial Ad strictly after every 3 completed games (gamesPlayed % 3 === 0).
+   */
+  public async gameOver(): Promise<{
+    triggeredInterstitial: boolean;
+    showWebSimulation: boolean;
+    gamesPlayed: number;
+  }> {
+    const currentGamesPlayed = incrementGamesPlayed();
+
+    if (currentGamesPlayed % ADMOB_CONFIG.INTERSTITIAL_FREQUENCY === 0) {
+      const adResult = await this.showInterstitialAd();
+      return {
+        ...adResult,
+        gamesPlayed: currentGamesPlayed,
+      };
+    }
+
+    void this.preloadInterstitial();
+
+    return {
+      triggeredInterstitial: false,
+      showWebSimulation: false,
+      gamesPlayed: currentGamesPlayed,
+    };
+  }
+
   public async recordGameOverAndMaybeShowInterstitial(): Promise<{
     triggeredInterstitial: boolean;
     showWebSimulation: boolean;
     gameOverCount: number;
   }> {
-    this.gameOverCount += 1;
-    const shouldShow = this.gameOverCount % ADMOB_CONFIG.INTERSTITIAL_FREQUENCY === 0;
-
-    if (!shouldShow) {
-      return {
-        triggeredInterstitial: false,
-        showWebSimulation: false,
-        gameOverCount: this.gameOverCount,
-      };
-    }
-
-    if (this.isNative()) {
-      try {
-        if (!this.interstitialReady) {
-          await this.preloadInterstitial();
-        }
-        await AdMob.showInterstitial();
-        this.interstitialReady = false;
-        // Preload next interstitial for the next 3rd game over cycle
-        this.preloadInterstitial().catch(() => {});
-        return {
-          triggeredInterstitial: true,
-          showWebSimulation: false,
-          gameOverCount: this.gameOverCount,
-        };
-      } catch (err) {
-        console.warn('AdMob showInterstitial error:', err);
-        return {
-          triggeredInterstitial: false,
-          showWebSimulation: false,
-          gameOverCount: this.gameOverCount,
-        };
-      }
-    }
-
-    // In browser preview, trigger the interactive AdMob Test Interstitial simulation
+    const res = await this.gameOver();
     return {
-      triggeredInterstitial: true,
-      showWebSimulation: true,
-      gameOverCount: this.gameOverCount,
+      triggeredInterstitial: res.triggeredInterstitial,
+      showWebSimulation: res.showWebSimulation,
+      gameOverCount: res.gamesPlayed,
     };
   }
 }

@@ -1,4 +1,4 @@
-name: Build Color Stack 3D Android APK
+name: Build APK
 
 on:
   push:
@@ -13,64 +13,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup Java JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
+          distribution: 'zulu'
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Build web app
+      - name: Build Web Game & Sync Android Assets
         run: |
           rm -f public/color-stack-android-apk-project.zip
+          npm install --legacy-peer-deps
           npm run build
+          node scripts/sync-android-assets.mjs
 
-      - name: Sync Capacitor Android
-        run: |
-          if [ ! -f "android/app/build.gradle" ]; then
-            npx cap add android
-          fi
-          npx cap sync android
-
-      - name: Configure Android SDK and Gradle wrapper
-        run: |
-          SDK_DIR="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          mkdir -p "$SDK_DIR/licenses"
-          printf "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n859f317696f67ef3d7f30a50a5560e7834b43903\n" > "$SDK_DIR/licenses/android-sdk-license"
-          printf "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910\n" > "$SDK_DIR/licenses/android-sdk-preview-license"
-          printf "sdk.dir=%s\n" "$SDK_DIR" > android/local.properties
-          if [ ! -f "android/gradle/wrapper/gradle-wrapper.jar" ] && command -v gradle >/dev/null 2>&1; then
-            (cd android && gradle wrapper --gradle-version 8.14.3)
-          fi
-          node -e '
-            const fs = require("fs");
-            const p = "android/app/src/main/AndroidManifest.xml";
-            if (fs.existsSync(p)) {
-              let x = fs.readFileSync(p, "utf8");
-              if (!x.includes("com.google.android.gms.ads.APPLICATION_ID")) {
-                x = x.replace("</application>", "        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"ca-app-pub-3940256099942544~3347511713\" />\n    </application>");
-                fs.writeFileSync(p, x);
-              }
-            }
-          '
-
-      - name: Build APK
+      - name: Grant execute permission for gradlew
         run: |
           sed -i 's/\r$//' android/gradlew
           chmod +x android/gradlew
-          cd android
-          ./gradlew clean
-          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Build Debug APK with Gradle
+        working-directory: android
+        run: |
+          ./gradlew clean assembleDebug --no-daemon
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ColorStack3D-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: ColorStack3D-APK-RealAds
+          path: android/app/build/outputs/apk/debug/app-debug.apk

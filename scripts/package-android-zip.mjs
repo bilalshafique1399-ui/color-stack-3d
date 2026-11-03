@@ -34,6 +34,7 @@ const EXCLUDED_NAMES = new Set([
   'Thumbs.db',
   'color-stack-android-apk-project.zip',
   'ColorStack3D-debug.apk',
+  'ColorStack3D-APK-RealAds.apk',
 ]);
 
 const EXECUTABLE_PATHS = new Set(['android/gradlew', 'build-apk.sh']);
@@ -77,11 +78,11 @@ const targets = [
   'android',
   'src',
   'public',
+  'scripts',
   '.github',
   '.npmrc',
   '.gitattributes',
   '.gitignore',
-  'capacitor.config.ts',
   'build-apk.sh',
   'firebase-applet-config.json',
   'firebase-blueprint.json',
