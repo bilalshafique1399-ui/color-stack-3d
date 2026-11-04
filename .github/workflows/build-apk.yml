@@ -1,46 +1,36 @@
-name: Build AAB
+name: Build APK
 
 on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
+          distribution: 'temurin'
           java-version: '17'
-          distribution: 'zulu'
 
-      - name: Build Web Game & Sync Android Assets
-        run: |
-          rm -f public/color-stack-android-apk-project.zip
-          npm install --legacy-peer-deps
-          npm run build
-          node scripts/sync-android-assets.mjs
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
 
-      - name: Grant execute permission for gradlew
-        run: |
-          chmod +x android/gradlew
+      - name: Get packages
+        run: flutter pub get
 
-      - name: Build Release AAB
-        run: |
-          cd android
-          ./gradlew bundleRelease
+      - name: Build APK
+        run: flutter build apk --release
 
-      - name: Upload AAB
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ColorStack3D-AAB
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: ColorStack3D-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
