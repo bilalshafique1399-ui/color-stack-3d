@@ -1,29 +1,41 @@
 import { Capacitor } from '@capacitor/core';
 
+export type NativeRewardType = 'save_life' | 'life' | 'restart' | 'coins' | 'spin' | 'mystery';
+
 interface AndroidAdBridge {
+  watchSaveLife?: () => void;
+  watchRewardedAd?: (rewardType: string) => void;
+  preloadRewardedAd?: () => void;
   showInterstitial?: () => void;
   preloadInterstitial?: () => void;
+  getBannerId?: () => string;
   isNativeAndroid?: () => boolean;
 }
 
 declare global {
   interface Window {
     Android?: AndroidAdBridge;
+    giveLifeFromAd?: () => void;
+    giveRewardFromAd?: (rewardType: string) => void;
+    onNativeRewardedAdUnavailable?: (rewardType: string) => void;
+    watchAdForLife?: () => void;
   }
 }
 
 /**
  * Final Live Google AdMob Ad Unit IDs:
  * - App ID: ca-app-pub-8318388001860392~8689085671
- * - Banner Ad ID: ca-app-pub-8318388001860392/4000077808 (native AdView at bottom in activity_main.xml)
- * - Interstitial Ad ID: ca-app-pub-8318388001860392/3808506117 (shown after every 3 completed games via Android.showInterstitial())
- * - App Open Ad ID: ca-app-pub-8318388001860392/6741791216 (loaded & shown in MainActivity.java)
+ * - Banner Ad ID: ca-app-pub-8318388001860392/7839164745 (native AdView at bottom in activity_main.xml)
+ * - Interstitial Ad ID: ca-app-pub-8318388001860392/2642678386 (shown after every 3 completed games via Android.showInterstitial())
+ * - Rewarded Ad ID (Watch Save Life): ca-app-pub-8318388001860392/9842511553 (Android.watchSaveLife() / Android.watchRewardedAd())
+ * - App Open Ad ID: ca-app-pub-8318388001860392/5400703665 (loaded & shown in MainActivity.java)
  */
 export const ADMOB_CONFIG = {
   APP_ID_ANDROID: 'ca-app-pub-8318388001860392~8689085671',
-  BANNER_AD_ID: 'ca-app-pub-8318388001860392/4000077808',
-  INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/3808506117',
-  APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/6741791216',
+  BANNER_AD_ID: 'ca-app-pub-8318388001860392/7839164745',
+  INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/2642678386',
+  REWARDED_AD_ID: 'ca-app-pub-8318388001860392/9842511553',
+  APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/5400703665',
   INTERSTITIAL_FREQUENCY: 3, // Show after every 3 completed games
 } as const;
 
@@ -72,7 +84,17 @@ class AdMobManager {
     return (
       typeof window !== 'undefined' &&
       typeof window.Android !== 'undefined' &&
-      typeof window.Android.showInterstitial === 'function'
+      (typeof window.Android.watchSaveLife === 'function' ||
+        typeof window.Android.showInterstitial === 'function')
+    );
+  }
+
+  public hasNativeRewardedBridge(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.Android !== 'undefined' &&
+      (typeof window.Android.watchRewardedAd === 'function' ||
+        typeof window.Android.watchSaveLife === 'function')
     );
   }
 
@@ -85,9 +107,9 @@ class AdMobManager {
   }
 
   public async initializeAndShowBanner(): Promise<void> {
-    // On Android APK, Banner + AppOpen + Interstitial preload run natively in MainActivity.java
     if (this.hasAndroidBridge()) {
       window.Android?.preloadInterstitial?.();
+      window.Android?.preloadRewardedAd?.();
     }
   }
 
@@ -95,6 +117,7 @@ class AdMobManager {
     if (this.hasAndroidBridge()) {
       try {
         window.Android?.preloadInterstitial?.();
+        window.Android?.preloadRewardedAd?.();
       } catch {
         // Ignore bridge errors
       }
@@ -102,14 +125,41 @@ class AdMobManager {
     return true;
   }
 
+  /**
+   * Triggers native AdMob Rewarded Ad (ca-app-pub-8318388001860392/9842511553) via Android.watchSaveLife()
+   * or Android.watchRewardedAd(rewardType) when inside the Android Studio APK.
+   * Returns true if native bridge handled it; false if browser simulation modal should run.
+   */
+  public triggerRewardedAd(rewardType: NativeRewardType = 'save_life'): boolean {
+    if (!this.hasNativeRewardedBridge()) {
+      return false;
+    }
+    try {
+      if (
+        rewardType === 'save_life' &&
+        typeof window.Android?.watchSaveLife === 'function'
+      ) {
+        window.Android.watchSaveLife();
+        return true;
+      }
+      if (typeof window.Android?.watchRewardedAd === 'function') {
+        window.Android.watchRewardedAd(rewardType);
+        return true;
+      }
+      if (typeof window.Android?.watchSaveLife === 'function') {
+        window.Android.watchSaveLife();
+        return true;
+      }
+    } catch (err) {
+      console.warn('Native Rewarded Ad call failed:', err);
+    }
+    return false;
+  }
+
   public handleWebInterstitialDismissed(): void {
     void this.preloadInterstitial();
   }
 
-  /**
-   * Calls native Android.showInterstitial() when running inside the Android APK,
-   * or triggers the web simulation modal when previewing in browser.
-   */
   public async showInterstitialAd(): Promise<{
     triggeredInterstitial: boolean;
     showWebSimulation: boolean;
@@ -143,16 +193,20 @@ class AdMobManager {
     };
   }
 
-  /**
-   * Increments persistent gamesPlayed counter (saved in localStorage) and triggers
-   * Interstitial Ad strictly after every 3 completed games (gamesPlayed % 3 === 0).
-   */
-  public async gameOver(): Promise<{
+  public async gameOver(skipAdsForVip: boolean = false): Promise<{
     triggeredInterstitial: boolean;
     showWebSimulation: boolean;
     gamesPlayed: number;
   }> {
     const currentGamesPlayed = incrementGamesPlayed();
+
+    if (skipAdsForVip) {
+      return {
+        triggeredInterstitial: false,
+        showWebSimulation: false,
+        gamesPlayed: currentGamesPlayed,
+      };
+    }
 
     if (currentGamesPlayed % ADMOB_CONFIG.INTERSTITIAL_FREQUENCY === 0) {
       const adResult = await this.showInterstitialAd();

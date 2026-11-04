@@ -1,5 +1,5 @@
 {
-  "summary": "MainActivity.java with live AdMob Banner (`ca-app-pub-8318388001860392/4000077808`), Interstitial (`ca-app-pub-8318388001860392/3808506117` preloaded at start & reloaded on close, triggered every 3 games via `Android.showInterstitial()`), App Open (`ca-app-pub-8318388001860392/6741791216`), and local APK asset WebView serving.",
-  "updatedAt": "2026-11-03T17:05:37.274138850Z",
+  "summary": "Android MainActivity integrating all 4 updated live Google AdMob unit IDs (Banner 7839164745, Interstitial 2642678386, Rewarded Watch Save Life 9842511553, App Open 5400703665) with proper SDK initialization sequencing, fullscreen ad collision protection, auto-retry, and WebView JS bridge.",
+  "updatedAt": "2026-11-04T06:31:33.647996766Z",
   "userFacing": true
 }

@@ -66,7 +66,7 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
         </div>
 
         <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-          This project includes a standalone Android project (SDK 34, AdMob 22.6.0) pre-wired with portrait lock and your live AdMob App, Banner, Interstitial (every 3 games), and App Open IDs.
+          This project includes a standalone Android project (SDK 34, AdMob 22.6.0) pre-wired with portrait lock and your live AdMob App, Banner, Interstitial (every 3 games), Rewarded (Watch Save Life), and App Open IDs.
         </p>
 
         {/* Primary Action 1: Download Pre-Configured Android Studio / Gradle APK Project */}
@@ -131,6 +131,12 @@ export const ApkBuildModal: React.FC<ApkBuildModalProps> = ({ isOpen, onClose })
               <div className="text-slate-400">App Open Ad (Launch &amp; Resume)</div>
               <div className="font-mono text-[11px] text-violet-300 break-all tabular-nums">
                 {ADMOB_CONFIG.APP_OPEN_AD_ID}
+              </div>
+            </div>
+            <div className="border-t border-white/5 pt-2">
+              <div className="text-slate-400">Rewarded Ad (Watch Save Life / +Coins / +Spin)</div>
+              <div className="font-mono text-[11px] text-pink-300 break-all tabular-nums">
+                {ADMOB_CONFIG.REWARDED_AD_ID}
               </div>
             </div>
           </div>

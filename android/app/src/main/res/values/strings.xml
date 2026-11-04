@@ -1,11 +1,12 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Color Stack 3D</string>
     <string name="title_activity_main">Color Stack 3D</string>
     <string name="package_name">com.colorstack3d.game</string>
     <string name="custom_url_scheme">com.colorstack3d.game</string>
     <string name="admob_app_id">ca-app-pub-8318388001860392~8689085671</string>
-    <string name="admob_banner_id">ca-app-pub-8318388001860392/4000077808</string>
-    <string name="admob_interstitial_id">ca-app-pub-8318388001860392/3808506117</string>
-    <string name="admob_app_open_id">ca-app-pub-8318388001860392/6741791216</string>
+    <string name="admob_banner_id">ca-app-pub-8318388001860392/7839164745</string>
+    <string name="admob_interstitial_id">ca-app-pub-8318388001860392/2642678386</string>
+    <string name="admob_rewarded_id">ca-app-pub-8318388001860392/9842511553</string>
+    <string name="admob_app_open_id">ca-app-pub-8318388001860392/5400703665</string>
 </resources>

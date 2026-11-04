@@ -1,5 +1,5 @@
 {
-  "summary": "Android strings.xml containing Color Stack 3D app metadata, package identifier, and official Google AdMob Android Test App ID.",
-  "updatedAt": "2026-11-03T07:26:27.910071759Z",
+  "summary": "Android resource strings.xml containing app metadata and all 5 live Google AdMob IDs (App ID, Banner, Interstitial, Rewarded Watch Save Life, and App Open).",
+  "updatedAt": "2026-11-04T06:33:09.073754973Z",
   "userFacing": true
 }

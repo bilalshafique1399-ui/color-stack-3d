@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { getAtmosphereColors, getBlockColor } from './colorPalette';
+import {
+  CubeSkinId,
+  getAtmosphereColors,
+  getBlockColor,
+  getSkinMaterialSpec,
+} from './colorPalette';
 import { soundEngine } from '../audio/soundEngine';
 import { hapticEngine } from '../audio/hapticEngine';
 import { highScoreService } from '../services/highScoreService';
@@ -177,6 +182,7 @@ export class StackTowerEngine {
   private runCoins = 0;
   private seedOffset = 0;
   private feedbackCounter = 0;
+  private skinId: CubeSkinId = 'classic';
 
   private cameraTargetY = 1.5;
   private cameraCurrentY = 1.5;
@@ -479,13 +485,16 @@ export class StackTowerEngine {
   }
 
   private createBlockMaterial(color: THREE.Color): THREE.MeshPhysicalMaterial {
-    return new THREE.MeshPhysicalMaterial({
+    const spec = getSkinMaterialSpec(this.skinId);
+    const mat = new THREE.MeshPhysicalMaterial({
       color: color.clone(),
-      roughness: 0.24,
-      metalness: 0.06,
-      clearcoat: 0.42,
-      clearcoatRoughness: 0.18,
+      roughness: spec.roughness,
+      metalness: spec.metalness,
+      clearcoat: spec.clearcoat,
+      clearcoatRoughness: spec.clearcoatRoughness,
     });
+    mat.emissive.setHex(spec.baseEmissiveHex);
+    return mat;
   }
 
   private clearActiveCoin(): void {
@@ -547,10 +556,15 @@ export class StackTowerEngine {
     this.punchZoom = 0;
 
     // Color pedestal monolith with layer 0 color
-    const baseColor = getBlockColor(0, this.seedOffset);
+    const baseColor = getBlockColor(0, this.seedOffset, this.skinId);
+    const spec = getSkinMaterialSpec(this.skinId);
     this.pedestalCoreMat.color.copy(baseColor);
+    this.pedestalCoreMat.roughness = spec.roughness;
+    this.pedestalCoreMat.metalness = spec.metalness;
+    this.pedestalCoreMat.clearcoat = spec.clearcoat;
+    this.pedestalCoreMat.emissive.setHex(spec.baseEmissiveHex);
 
-    const { topHex, bottomHex } = getAtmosphereColors(0, this.seedOffset);
+    const { topHex, bottomHex } = getAtmosphereColors(0, this.seedOffset, this.skinId);
     this.targetTopBg.set(topHex);
     this.targetBottomBg.set(bottomHex);
     this.currentTopBg.copy(this.targetTopBg);
@@ -558,7 +572,7 @@ export class StackTowerEngine {
     this.updateBackgroundTexture();
 
     // Base anchor slab at layer 0 (y = BLOCK_HEIGHT / 2)
-    const slabColor = getBlockColor(1, this.seedOffset);
+    const slabColor = getBlockColor(1, this.seedOffset, this.skinId);
     const slabMat = this.createBlockMaterial(slabColor);
     const slabMesh = new THREE.Mesh(this.sharedBoxGeo, slabMat);
     slabMesh.scale.set(INITIAL_SIZE, BLOCK_HEIGHT, INITIAL_SIZE);
@@ -601,9 +615,64 @@ export class StackTowerEngine {
     this.spawnNextActiveBlock();
   }
 
+  /**
+   * Revives the current tower after Game Over ("Watch Save Life") so the player continues
+   * stacking from their exact score, resetting runCoins so previously banked coins aren't duplicated.
+   */
+  public reviveCurrentRun(): boolean {
+    if (this.phase !== 'gameover' || this.layers.length === 0) {
+      this.startNewGame();
+      return false;
+    }
+
+    soundEngine.unlock();
+    hapticEngine.stop();
+    hapticEngine.vibrateTap();
+    void admobService.preloadInterstitial();
+
+    // Reset runCoins because coins from before Game Over were already banked into wallet!
+    this.runCoins = 0;
+    this.targetZoomOut = 1.0;
+
+    // Ensure the top slab has a playable minimum width/depth so the saved life feels rewarding
+    const topLayer = this.layers[this.layers.length - 1];
+    const minPlayableSize = 1.35;
+    if (topLayer.width < minPlayableSize || topLayer.depth < minPlayableSize) {
+      topLayer.width = Math.min(INITIAL_SIZE, Math.max(topLayer.width, minPlayableSize));
+      topLayer.depth = Math.min(INITIAL_SIZE, Math.max(topLayer.depth, minPlayableSize));
+      const maxOffsetX = Math.max(0, (INITIAL_SIZE - topLayer.width) * 0.5);
+      const maxOffsetZ = Math.max(0, (INITIAL_SIZE - topLayer.depth) * 0.5);
+      topLayer.x = THREE.MathUtils.clamp(topLayer.x, -maxOffsetX, maxOffsetX);
+      topLayer.z = THREE.MathUtils.clamp(topLayer.z, -maxOffsetZ, maxOffsetZ);
+      topLayer.mesh.scale.set(topLayer.width, BLOCK_HEIGHT, topLayer.depth);
+      topLayer.mesh.position.set(topLayer.x, topLayer.y, topLayer.z);
+    }
+
+    this.callbacks.onScoreChange(
+      this.score,
+      this.bestScore,
+      this.combo,
+      computeProgressionLevel(this.score, this.computeBlockSpeed(this.score)),
+      0,
+    );
+
+    this.phase = 'playing';
+    this.callbacks.onPhaseChange('playing');
+    this.spawnNextActiveBlock();
+    return true;
+  }
+
   public setBestScore(nextBest: number): void {
     if (nextBest > this.bestScore) {
       this.bestScore = nextBest;
+    }
+  }
+
+  public setSkin(nextSkin: CubeSkinId): void {
+    if (this.skinId === nextSkin) return;
+    this.skinId = nextSkin;
+    if (this.phase === 'idle') {
+      this.setupInitialTower();
     }
   }
 
@@ -635,7 +704,7 @@ export class StackTowerEngine {
   private spawnNextActiveBlock(): void {
     const topLayer = this.layers[this.layers.length - 1];
     const nextLayerNumber = this.totalLayers + 1;
-    const blockColor = getBlockColor(nextLayerNumber, this.seedOffset);
+    const blockColor = getBlockColor(nextLayerNumber, this.seedOffset, this.skinId);
 
     this.activeMat = this.createBlockMaterial(blockColor);
     this.activeMesh = new THREE.Mesh(this.sharedBoxGeo, this.activeMat);
@@ -668,7 +737,7 @@ export class StackTowerEngine {
 
     this.cameraTargetY = Math.max(1.8, nextY - 0.6);
 
-    const { topHex, bottomHex } = getAtmosphereColors(nextLayerNumber, this.seedOffset);
+    const { topHex, bottomHex } = getAtmosphereColors(nextLayerNumber, this.seedOffset, this.skinId);
     this.targetTopBg.set(topHex);
     this.targetBottomBg.set(bottomHex);
   }
@@ -1140,6 +1209,7 @@ export class StackTowerEngine {
     }
 
     // 2. Update landed block flash & settle bounce
+    const baseEmissive = getSkinMaterialSpec(this.skinId).baseEmissiveHex;
     for (let i = 0; i < this.layers.length; i++) {
       const layer = this.layers[i];
       if (layer.flash > 0.005) {
@@ -1148,7 +1218,7 @@ export class StackTowerEngine {
         layer.material.emissive.copy(_tempColor);
       } else if (layer.flash > 0) {
         layer.flash = 0;
-        layer.material.emissive.setHex(0x000000);
+        layer.material.emissive.setHex(baseEmissive);
       }
 
       if (layer.bounce > 0.005) {

@@ -3,15 +3,20 @@ package com.colorstack3d.game;
 import android.annotation.SuppressLint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.FullScreenContentCallback;
@@ -20,6 +25,8 @@ import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.appopen.AppOpenAd;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+import com.google.android.gms.ads.rewarded.RewardedAd;
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import java.io.InputStream;
 import java.net.URLConnection;
 import java.util.HashMap;
@@ -28,12 +35,27 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
     private InterstitialAd mInterstitialAd;
     private boolean isInterstitialLoading = false;
+
+    private RewardedAd mRewardedAd;
+    private boolean isRewardedLoading = false;
+
+    private AppOpenAd mAppOpenAd;
+    private boolean isAppOpenLoading = false;
+    private boolean hasShownInitialAppOpen = false;
+    private long lastBackgroundTimestampMs = 0L;
+
+    private boolean isShowingFullScreenAd = false;
+    private boolean adsInitialized = false;
+
     private AdView adView;
     private WebView wv;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    String BANNER = "ca-app-pub-8318388001860392/4000077808";
-    String INTERSTITIAL = "ca-app-pub-8318388001860392/3808506117";
-    String APPOPEN = "ca-app-pub-8318388001860392/6741791216";
+    // Live Google AdMob Unit IDs (App ID in AndroidManifest.xml: ca-app-pub-8318388001860392~8689085671)
+    private static final String BANNER_ID = "ca-app-pub-8318388001860392/7839164745";
+    private static final String INTERSTITIAL_ID = "ca-app-pub-8318388001860392/2642678386";
+    private static final String REWARDED_ID = "ca-app-pub-8318388001860392/9842511553";
+    private static final String APP_OPEN_ID = "ca-app-pub-8318388001860392/5400703665";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -41,38 +63,54 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        MobileAds.initialize(this, status -> {});
-
-        // 1. Banner Ad (Bottom Always)
         adView = findViewById(R.id.bannerAd);
+        wv = findViewById(R.id.gameWebView);
+
+        setupWebView();
+
+        // Initialize Google Mobile Ads SDK first, then load all 4 ad formats once ready
+        MobileAds.initialize(this, initializationStatus ->
+            runOnUiThread(this::initAllAdsAfterSdkReady)
+        );
+        // Fallback safety trigger in case MobileAds callback is delayed on custom ROMs
+        mainHandler.postDelayed(this::initAllAdsAfterSdkReady, 2500);
+    }
+
+    private void initAllAdsAfterSdkReady() {
+        if (adsInitialized || isFinishing() || isDestroyed()) {
+            return;
+        }
+        adsInitialized = true;
+
+        // 1. Banner Ad (Bottom Always: ca-app-pub-8318388001860392/7839164745)
         if (adView != null) {
+            adView.setAdListener(new AdListener() {
+                @Override
+                public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                    mainHandler.postDelayed(() -> {
+                        if (adView != null && !isFinishing() && !isDestroyed()) {
+                            adView.loadAd(new AdRequest.Builder().build());
+                        }
+                    }, 10000);
+                }
+            });
             adView.loadAd(new AdRequest.Builder().build());
         }
 
-        // 2. Interstitial Ad Preload at Game Start (reloads automatically after close)
+        // 2. Interstitial Ad Preload (ca-app-pub-8318388001860392/2642678386)
         loadInterstitial();
 
-        // 3. App Open Ad Load & Show
-        AppOpenAd.load(
-            this,
-            APPOPEN,
-            new AdRequest.Builder().build(),
-            AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT,
-            new AppOpenAd.AppOpenAdLoadCallback() {
-                @Override
-                public void onAdLoaded(@NonNull AppOpenAd ad) {
-                    ad.show(MainActivity.this);
-                }
+        // 3. Rewarded Ad Preload - Watch Save Life (ca-app-pub-8318388001860392/9842511553)
+        loadRewardedAd();
 
-                @Override
-                public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                    // Continue game if App Open ad fails to load
-                }
-            }
-        );
+        // 4. App Open Ad Preload & Cold-Start Show (ca-app-pub-8318388001860392/5400703665)
+        loadAppOpenAd(true);
+    }
 
-        // 4. WebView Game + JavaScript Ad Bridge (window.Android.showInterstitial())
-        wv = findViewById(R.id.gameWebView);
+    @SuppressLint("SetJavaScriptEnabled")
+    private void setupWebView() {
+        if (wv == null) return;
+
         WebSettings settings = wv.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -100,7 +138,6 @@ public class MainActivity extends AppCompatActivity {
                         headers.put("Access-Control-Allow-Origin", "*");
                         return new WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, stream);
                     } catch (Exception ignored) {
-                        // Fall back to index.html for SPA routes (/leaderboard, /profile, etc.)
                         if (!assetPath.contains(".")) {
                             try {
                                 InputStream indexStream = getAssets().open("index.html");
@@ -116,7 +153,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         wv.addJavascriptInterface(new WebAppAdBridge(), "Android");
-        // Serve local APK assets over https:// origin so ES modules, localStorage, and Three.js work cleanly
         wv.loadUrl("https://appassets.androidplatform.net/index.html");
     }
 
@@ -135,14 +171,73 @@ public class MainActivity extends AppCompatActivity {
         return guessed != null ? guessed : "application/octet-stream";
     }
 
+    public void loadAppOpenAd(final boolean showImmediatelyWhenLoaded) {
+        if (mAppOpenAd != null || isAppOpenLoading || isFinishing() || isDestroyed()) {
+            return;
+        }
+        isAppOpenLoading = true;
+        AppOpenAd.load(
+            this,
+            APP_OPEN_ID,
+            new AdRequest.Builder().build(),
+            new AppOpenAd.AppOpenAdLoadCallback() {
+                @Override
+                public void onAdLoaded(@NonNull AppOpenAd ad) {
+                    isAppOpenLoading = false;
+                    mAppOpenAd = ad;
+                    mAppOpenAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        @Override
+                        public void onAdShowedFullScreenContent() {
+                            isShowingFullScreenAd = true;
+                        }
+
+                        @Override
+                        public void onAdDismissedFullScreenContent() {
+                            isShowingFullScreenAd = false;
+                            mAppOpenAd = null;
+                            loadAppOpenAd(false);
+                        }
+
+                        @Override
+                        public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
+                            isShowingFullScreenAd = false;
+                            mAppOpenAd = null;
+                            loadAppOpenAd(false);
+                        }
+                    });
+
+                    if (showImmediatelyWhenLoaded && !hasShownInitialAppOpen && !isShowingFullScreenAd) {
+                        hasShownInitialAppOpen = true;
+                        showAppOpenAdIfAvailable();
+                    }
+                }
+
+                @Override
+                public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                    isAppOpenLoading = false;
+                    mAppOpenAd = null;
+                    mainHandler.postDelayed(() -> loadAppOpenAd(false), 12000);
+                }
+            }
+        );
+    }
+
+    public void showAppOpenAdIfAvailable() {
+        if (mAppOpenAd != null && !isShowingFullScreenAd && !isFinishing() && !isDestroyed()) {
+            mAppOpenAd.show(MainActivity.this);
+        } else if (mAppOpenAd == null) {
+            loadAppOpenAd(false);
+        }
+    }
+
     public void loadInterstitial() {
-        if (mInterstitialAd != null || isInterstitialLoading) {
+        if (mInterstitialAd != null || isInterstitialLoading || isFinishing() || isDestroyed()) {
             return;
         }
         isInterstitialLoading = true;
         InterstitialAd.load(
             this,
-            INTERSTITIAL,
+            INTERSTITIAL_ID,
             new AdRequest.Builder().build(),
             new InterstitialAdLoadCallback() {
                 @Override
@@ -151,14 +246,20 @@ public class MainActivity extends AppCompatActivity {
                     mInterstitialAd = ad;
                     mInterstitialAd.setFullScreenContentCallback(new FullScreenContentCallback() {
                         @Override
+                        public void onAdShowedFullScreenContent() {
+                            isShowingFullScreenAd = true;
+                        }
+
+                        @Override
                         public void onAdDismissedFullScreenContent() {
+                            isShowingFullScreenAd = false;
                             mInterstitialAd = null;
-                            // Immediately preload next Interstitial Ad after close
                             loadInterstitial();
                         }
 
                         @Override
                         public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
+                            isShowingFullScreenAd = false;
                             mInterstitialAd = null;
                             loadInterstitial();
                         }
@@ -169,6 +270,7 @@ public class MainActivity extends AppCompatActivity {
                 public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                     isInterstitialLoading = false;
                     mInterstitialAd = null;
+                    mainHandler.postDelayed(MainActivity.this::loadInterstitial, 8000);
                 }
             }
         );
@@ -176,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void showInterstitial() {
         runOnUiThread(() -> {
-            if (mInterstitialAd != null) {
+            if (mInterstitialAd != null && !isShowingFullScreenAd && !isFinishing() && !isDestroyed()) {
                 mInterstitialAd.show(MainActivity.this);
             } else {
                 loadInterstitial();
@@ -184,7 +286,116 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    public void loadRewardedAd() {
+        if (mRewardedAd != null || isRewardedLoading || isFinishing() || isDestroyed()) {
+            return;
+        }
+        isRewardedLoading = true;
+        RewardedAd.load(
+            this,
+            REWARDED_ID,
+            new AdRequest.Builder().build(),
+            new RewardedAdLoadCallback() {
+                @Override
+                public void onAdLoaded(@NonNull RewardedAd ad) {
+                    isRewardedLoading = false;
+                    mRewardedAd = ad;
+                    mRewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                        @Override
+                        public void onAdShowedFullScreenContent() {
+                            isShowingFullScreenAd = true;
+                        }
+
+                        @Override
+                        public void onAdDismissedFullScreenContent() {
+                            isShowingFullScreenAd = false;
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+
+                        @Override
+                        public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
+                            isShowingFullScreenAd = false;
+                            mRewardedAd = null;
+                            loadRewardedAd();
+                        }
+                    });
+                }
+
+                @Override
+                public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                    isRewardedLoading = false;
+                    mRewardedAd = null;
+                    mainHandler.postDelayed(MainActivity.this::loadRewardedAd, 5000);
+                }
+            }
+        );
+    }
+
+    public void showRewardedAd(final String rewardType) {
+        final String safeType = (rewardType == null || rewardType.isEmpty())
+            ? "save_life"
+            : rewardType.replaceAll("[^a-zA-Z0-9_]", "");
+
+        if (mRewardedAd != null && !isShowingFullScreenAd && !isFinishing() && !isDestroyed()) {
+            RewardedAd adToShow = mRewardedAd;
+            mRewardedAd = null;
+            adToShow.show(MainActivity.this, rewardItem -> {
+                Toast.makeText(
+                    MainActivity.this,
+                    "Reward Earned!",
+                    Toast.LENGTH_SHORT
+                ).show();
+
+                if (wv != null) {
+                    if ("life".equals(safeType) || "save_life".equals(safeType)) {
+                        wv.evaluateJavascript(
+                            "if(window.giveRewardFromAd){window.giveRewardFromAd('" + safeType + "');}else if(window.giveLifeFromAd){window.giveLifeFromAd();}",
+                            null
+                        );
+                    } else {
+                        wv.evaluateJavascript(
+                            "if(window.giveRewardFromAd){window.giveRewardFromAd('" + safeType + "');}else if(window.giveLifeFromAd){window.giveLifeFromAd();}",
+                            null
+                        );
+                    }
+                }
+                loadRewardedAd();
+            });
+        } else {
+            // Preload fresh Rewarded Ad and gracefully notify WebView so user is never stuck if AdMob has temporary NO_FILL
+            loadRewardedAd();
+            if (wv != null) {
+                wv.evaluateJavascript(
+                    "if(window.onNativeRewardedAdUnavailable){window.onNativeRewardedAdUnavailable('" + safeType + "');}",
+                    null
+                );
+            } else {
+                Toast.makeText(
+                    MainActivity.this,
+                    "Rewarded Ad loading, please try in 2 seconds...",
+                    Toast.LENGTH_SHORT
+                ).show();
+            }
+        }
+    }
+
     public class WebAppAdBridge {
+        @JavascriptInterface
+        public void watchSaveLife() {
+            runOnUiThread(() -> MainActivity.this.showRewardedAd("save_life"));
+        }
+
+        @JavascriptInterface
+        public void watchRewardedAd(String rewardType) {
+            runOnUiThread(() -> MainActivity.this.showRewardedAd(rewardType));
+        }
+
+        @JavascriptInterface
+        public void preloadRewardedAd() {
+            runOnUiThread(MainActivity.this::loadRewardedAd);
+        }
+
         @JavascriptInterface
         public void showInterstitial() {
             MainActivity.this.showInterstitial();
@@ -196,6 +407,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public String getBannerId() {
+            return BANNER_ID;
+        }
+
+        @JavascriptInterface
         public boolean isNativeAndroid() {
             return true;
         }
@@ -203,8 +419,12 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
+        lastBackgroundTimestampMs = SystemClock.elapsedRealtime();
         if (adView != null) {
             adView.pause();
+        }
+        if (wv != null) {
+            wv.onPause();
         }
         super.onPause();
     }
@@ -212,15 +432,32 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (wv != null) {
+            wv.onResume();
+        }
         if (adView != null) {
             adView.resume();
+        }
+        // Show App Open Ad when user returns to app after >= 3 minutes in background
+        if (lastBackgroundTimestampMs > 0L) {
+            long awayMs = SystemClock.elapsedRealtime() - lastBackgroundTimestampMs;
+            lastBackgroundTimestampMs = 0L;
+            if (awayMs >= 180_000L) {
+                showAppOpenAdIfAvailable();
+            }
         }
     }
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
         if (adView != null) {
             adView.destroy();
+            adView = null;
+        }
+        if (wv != null) {
+            wv.destroy();
+            wv = null;
         }
         super.onDestroy();
     }

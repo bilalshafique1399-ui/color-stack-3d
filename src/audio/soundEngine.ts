@@ -293,6 +293,44 @@ class SoundEngine {
     this.scheduleHarmonicVoice(ctx, 'triangle', 1318.51, now + 0.048, 0.19, 0.34); // E6
     this.scheduleHarmonicVoice(ctx, 'sine', 2637.02, now + 0.052, 0.08, 0.28); // E7 sparkle
   }
+
+  /**
+   * Short mechanical peg tick as the Lucky Spin Wheel passes a prize segment.
+   */
+  public playWheelTick(): void {
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1180, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.022);
+
+    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.024);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.026);
+  }
+
+  /**
+   * Celebratory ascending arpeggio when winning Spin Wheel, Daily Login Bonus, or Mission rewards.
+   */
+  public playRewardFanfare(): void {
+    hapticEngine.vibrateCoinPickup();
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    const chord = [523.25, 659.25, 783.99, 1046.5]; // C5 - E5 - G5 - C6
+    chord.forEach((freq, idx) => {
+      this.scheduleHarmonicVoice(ctx, 'triangle', freq, now + idx * 0.055, 0.16, 0.42);
+    });
+  }
 }
 
 export const soundEngine = new SoundEngine();
