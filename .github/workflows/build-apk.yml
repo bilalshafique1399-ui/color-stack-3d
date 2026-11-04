@@ -1,4 +1,4 @@
-name: Build APK
+name: Build AAB
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,16 +32,15 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: |
-          sed -i 's/\r$//' android/gradlew
           chmod +x android/gradlew
 
-      - name: Build Debug APK with Gradle
-        working-directory: android
+      - name: Build Release AAB
         run: |
-          ./gradlew clean assembleDebug --no-daemon
+          cd android
+          ./gradlew bundleRelease
 
-      - name: Upload APK Artifact
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: ColorStack3D-APK-RealAds
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ColorStack3D-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
