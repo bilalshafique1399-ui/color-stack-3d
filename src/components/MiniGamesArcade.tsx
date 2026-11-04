@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Dices, Palette, Sparkles } from 'lucide-react';
 import { soundEngine } from '../audio/soundEngine';
 import {
@@ -54,6 +54,16 @@ export const MiniGamesArcade: React.FC<MiniGamesArcadeProps> = ({
   const [lastDrawnColor, setLastDrawnColor] = useState<GuessPrismColor | null>(null);
   const [colorResultMsg, setColorResultMsg] = useState<string | null>(null);
 
+  const animIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (animIntervalRef.current !== null) {
+        window.clearInterval(animIntervalRef.current);
+      }
+    };
+  }, []);
+
   const vipActive = isVipClubActive(earnState);
   const freeLeft = getFreeMiniGamesRemaining(earnState);
   const mult = getRewardMultiplier(earnState);
@@ -63,13 +73,20 @@ export const MiniGamesArcade: React.FC<MiniGamesArcadeProps> = ({
     soundEngine.playClick();
     setRolling(true);
 
+    if (animIntervalRef.current !== null) {
+      window.clearInterval(animIntervalRef.current);
+    }
+
     let ticks = 0;
-    const tickInterval = window.setInterval(() => {
+    animIntervalRef.current = window.setInterval(() => {
       ticks += 1;
       setLastRolledNum(1 + Math.floor(Math.random() * 9));
       soundEngine.playWheelTick();
       if (ticks >= 8) {
-        window.clearInterval(tickInterval);
+        if (animIntervalRef.current !== null) {
+          window.clearInterval(animIntervalRef.current);
+          animIntervalRef.current = null;
+        }
         const res = playLuckyNumberMiniGame(earnState, pickedNum);
         setRolling(false);
         if (res.ok) {
@@ -89,14 +106,21 @@ export const MiniGamesArcade: React.FC<MiniGamesArcadeProps> = ({
     soundEngine.playClick();
     setRevealingColor(true);
 
+    if (animIntervalRef.current !== null) {
+      window.clearInterval(animIntervalRef.current);
+    }
+
     const sequence: GuessPrismColor[] = ['pink', 'emerald', 'gold'];
     let ticks = 0;
-    const tickInterval = window.setInterval(() => {
+    animIntervalRef.current = window.setInterval(() => {
       setLastDrawnColor(sequence[ticks % 3]);
       ticks += 1;
       soundEngine.playWheelTick();
       if (ticks >= 7) {
-        window.clearInterval(tickInterval);
+        if (animIntervalRef.current !== null) {
+          window.clearInterval(animIntervalRef.current);
+          animIntervalRef.current = null;
+        }
         const res = playGuessColorMiniGame(earnState, pickedColor);
         setRevealingColor(false);
         if (res.ok) {

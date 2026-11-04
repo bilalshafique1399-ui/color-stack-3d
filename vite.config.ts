@@ -12,7 +12,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: null,
-        includeAssets: ['favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png'],
+        includeAssets: ['favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png', 'privacy-policy.html'],
         manifest: {
           id: '/',
           name: 'Color Stack 3D',
@@ -48,6 +48,7 @@ export default defineConfig(() => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           globIgnores: ['**/*.zip'],
+          navigateFallbackDenylist: [/^\/privacy-policy\.html/, /^\/api\//],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
         devOptions: {

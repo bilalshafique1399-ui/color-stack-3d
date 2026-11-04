@@ -88,6 +88,7 @@ const targets = [
   'firebase-blueprint.json',
   'firestore.rules',
   'index.html',
+  'privacy-policy.html',
   'server.ts',
   'package.json',
   'package-lock.json',

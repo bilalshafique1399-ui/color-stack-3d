@@ -229,6 +229,7 @@ export default function App() {
   const [adSecondsLeft, setAdSecondsLeft] = useState(15);
   const [showInterstitial, setShowInterstitial] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [selectedProofModal, setSelectedProofModal] = useState<ProofWallItem | null>(null);
 
   // Page 6: Login / Register & Push state
@@ -680,7 +681,15 @@ export default function App() {
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') {
         return;
       }
-      if (adModalOpen || showInterstitial || showApkModal || selectedProofModal) return;
+      if (
+        adModalOpen ||
+        showInterstitial ||
+        showApkModal ||
+        showPrivacyModal ||
+        selectedProofModal
+      ) {
+        return;
+      }
 
       if (
         phaseRef.current === 'playing' ||
@@ -702,7 +711,15 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activePage, gameMode, adModalOpen, showInterstitial, showApkModal, selectedProofModal]);
+  }, [
+    activePage,
+    gameMode,
+    adModalOpen,
+    showInterstitial,
+    showApkModal,
+    showPrivacyModal,
+    selectedProofModal,
+  ]);
 
   const startSponsoredAd = useCallback(
     (type: AdRewardAction) => {
@@ -714,7 +731,7 @@ export default function App() {
         return;
       }
 
-      // Inside Android Studio APK: call real AdMob Rewarded Ad (ca-app-pub-8318388001860392/9842511553)!
+      // Inside Android Studio APK: call real AdMob Rewarded Ad (ca-app-pub-8318388001860392/6818862582)!
       if (admobService.triggerRewardedAd(type)) {
         return;
       }
@@ -3065,11 +3082,47 @@ export default function App() {
               )}
             </div>
 
+            {/* Privacy Policy & Support (Play Store Ready) */}
+            <div className="rounded-2xl bg-[#1C214E] p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-display text-sm font-bold text-white">
+                    Privacy Policy &amp; Support
+                  </h3>
+                  <p className="mt-0.5 text-xs text-[#bbb]">
+                    Offline-ready gameplay • Support: bilalshafique1399@gmail.com
+                  </p>
+                </div>
+                <ShieldCheck className="h-5 w-5 shrink-0 text-[#00D68F]" />
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setShowPrivacyModal(true);
+                  }}
+                  className="flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-[10px] bg-white px-4 py-2 text-xs font-extrabold text-black hover:bg-slate-100"
+                >
+                  <FileCheck2 className="h-4 w-4" />
+                  <span>Read Privacy Policy</span>
+                </button>
+                <a
+                  href="/privacy-policy.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-[10px] border border-white/15 bg-[#0F1226] px-4 py-2 text-xs font-bold text-white hover:bg-white/5"
+                >
+                  <span>Privacy Policy Page</span>
+                </a>
+              </div>
+            </div>
+
             {/* App & Android APK Download Options (Web Only) */}
             {!admobService.isNative() && (
               <div className="rounded-2xl bg-[#1C214E] p-4">
                 <h3 className="font-display text-sm font-bold text-white">
-                  Mobile App &amp; Android APK (AdMob 22.6.0 + Rewarded ID Ready)
+                  Mobile App &amp; Android APK (Google AdMob Production Ready)
                 </h3>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <button
@@ -3183,28 +3236,28 @@ export default function App() {
           </button>
         </nav>
 
-        <AdMobBannerBar />
+        <AdMobBannerBar vipZeroAds={vipClubActive} />
       </footer>
 
       {/* =================================================================== */}
-      {/* 15-SECOND SPONSORED AD MODAL (BROWSER PREVIEW FALLBACK)             */}
+      {/* 15-SECOND SPONSORED REWARD VIDEO MODAL (WEB / OFFLINE FALLBACK)     */}
       {/* =================================================================== */}
       {adModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Sponsored Ad"
+          aria-label="Sponsored Reward Video"
         >
           <div className="w-full max-w-[420px] rounded-[18px] bg-[#1C214E] p-4 shadow-2xl">
-            <div className="rounded-xl bg-black p-5 text-center">
+            <div className="rounded-xl bg-black p-5 text-center" data-ad-unit-id={ADMOB_CONFIG.REWARDED_AD_ID}>
               <h2 className="font-display text-xl font-extrabold text-white">
-                AdMob Rewarded Ad Preview
+                Sponsored Reward Video
               </h2>
-              <p className="mt-2 text-sm text-white">
+              <p className="mt-2 text-sm text-slate-200">
                 {adSecondsLeft > 0
-                  ? `Rewarded Video Ad playing... Wait 15s (Android APK Unit: ${ADMOB_CONFIG.REWARDED_AD_ID})`
-                  : 'Ad Finished! Claim Your Reward'}
+                  ? 'Watch the full sponsored video to unlock your reward...'
+                  : 'Reward Unlocked! Tap below to claim'}
               </p>
               <div className="my-3 font-display text-5xl font-black text-[#00D68F] tabular-nums">
                 {adSecondsLeft}
@@ -3230,6 +3283,60 @@ export default function App() {
                 {adSecondsLeft > 0 ? `Wait ${adSecondsLeft}s...` : 'Claim Reward'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* IN-APP PRIVACY POLICY MODAL                                         */}
+      {/* =================================================================== */}
+      {showPrivacyModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Privacy Policy"
+          onClick={() => setShowPrivacyModal(false)}
+        >
+          <div
+            className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/15 bg-[#14173A] p-5 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-extrabold text-white">
+                Privacy Policy — Color Stack 3D
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowPrivacyModal(false)}
+                className="text-slate-300 hover:text-white"
+                aria-label="Close Privacy Policy"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-3 space-y-2.5 text-xs leading-relaxed text-slate-300">
+              <p className="text-[11px] text-slate-400">
+                Last updated: November 4, 2026 • Package: com.colorstack3d.game / com.colorstack3d.app
+              </p>
+              <p>
+                <strong className="text-white">Local Gameplay Data:</strong> Color Stack 3D is playable offline and does not require an external account. High scores, coins, unlocked skins, and settings are stored locally on your device. We do not collect contacts, photos, microphone, or precise GPS location.
+              </p>
+              <p>
+                <strong className="text-white">Advertising (Google AdMob):</strong> Our Android app displays ads via Google Mobile Ads SDK (Google AdMob), which may use your Android Advertising ID for ad delivery and fraud prevention under Google&apos;s Privacy Policy. You can manage ad preferences anytime in Android Settings → Google → Ads.
+              </p>
+              <p>
+                <strong className="text-white">Contact:</strong> Questions? Reach us at{' '}
+                <span className="font-semibold text-[#00D68F]">bilalshafique1399@gmail.com</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyModal(false)}
+              className="mt-4 min-h-[42px] w-full whitespace-nowrap rounded-[10px] bg-[#00D68F] px-4 py-2.5 text-xs font-extrabold text-black"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

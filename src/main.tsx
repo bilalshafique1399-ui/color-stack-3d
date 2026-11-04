@@ -4,7 +4,13 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
 
-if (Capacitor.isNativePlatform()) {
+const isNativeAndroidWebView =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'appassets.androidplatform.net' ||
+    typeof window.Android !== 'undefined' ||
+    Capacitor.isNativePlatform());
+
+if (isNativeAndroidWebView) {
   // Inside native Android WebView, assets are served locally from the APK bundle;
   // unregister any stale service workers so APK updates always load fresh bundles.
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
-import { ADMOB_CONFIG } from '../services/admobService';
+import { Sparkles, X } from 'lucide-react';
 import { soundEngine } from '../audio/soundEngine';
 
 interface AdMobInterstitialModalProps {
@@ -46,15 +45,15 @@ export const AdMobInterstitialModal: React.FC<AdMobInterstitialModalProps> = ({
       className="fixed inset-0 z-50 flex flex-col justify-between bg-[#0B0E1D] p-5 text-white"
       role="dialog"
       aria-modal="true"
-      aria-label="AdMob Test Interstitial Ad"
+      aria-label="Sponsored Interstitial Ad"
     >
       {/* Top Bar */}
       <div className="mx-auto flex w-full max-w-md items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-slate-300">
           <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[11px] font-bold text-slate-950">
-            Ad
+            Sponsored
           </span>
-          <span>Test Ad</span>
+          <span>Color Stack 3D</span>
         </div>
 
         <button
@@ -68,7 +67,7 @@ export const AdMobInterstitialModal: React.FC<AdMobInterstitialModalProps> = ({
           }`}
         >
           {secondsLeft > 0 ? (
-            <span className="tabular-nums">Close in {secondsLeft}s</span>
+            <span className="tabular-nums">Continue in {secondsLeft}s</span>
           ) : (
             <>
               <X className="h-4 w-4" />
@@ -78,29 +77,22 @@ export const AdMobInterstitialModal: React.FC<AdMobInterstitialModalProps> = ({
         </button>
       </div>
 
-      {/* Center Test Creative */}
+      {/* Center Production Creative */}
       <div className="mx-auto flex w-full max-w-sm flex-col items-center rounded-3xl border border-white/15 bg-[#151A33] p-8 text-center shadow-2xl">
-        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-indigo-500 text-2xl font-extrabold font-display text-white shadow-lg">
-          G
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#00D68F] to-emerald-600 text-white shadow-lg">
+          <Sparkles className="h-8 w-8 text-slate-950" />
         </div>
         <h2 className="font-display text-2xl font-bold tracking-tight text-white [text-wrap:balance]">
-          Nice job! This is a Google AdMob Test Interstitial
+          Stack Higher &amp; Unlock VIP Rewards
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-slate-300">
-          Configured to trigger automatically after every 3 game overs in both Web Test Mode and your compiled Android APK.
+          Land 5 Perfect Drops in a row to expand your slab and multiply your coin streak. Upgrade to VIP Club anytime for zero ad breaks!
         </p>
-
-        <div className="mt-6 w-full rounded-xl border border-white/10 bg-[#0D1021] p-3.5 text-left">
-          <div className="text-[11px] font-medium text-slate-400">Active Interstitial Unit ID</div>
-          <div className="mt-1 break-all font-mono text-xs text-emerald-300 tabular-nums">
-            {ADMOB_CONFIG.INTERSTITIAL_AD_ID}
-          </div>
-        </div>
       </div>
 
       {/* Bottom Footer */}
       <div className="mx-auto w-full max-w-md text-center text-xs text-slate-400">
-        Google Mobile Ads SDK · Portrait Interstitial Slot
+        Sponsored Break · Tap Close to Return to Game
       </div>
     </div>
   );

@@ -27,14 +27,14 @@ declare global {
  * - App ID: ca-app-pub-8318388001860392~8689085671
  * - Banner Ad ID: ca-app-pub-8318388001860392/7839164745 (native AdView at bottom in activity_main.xml)
  * - Interstitial Ad ID: ca-app-pub-8318388001860392/2642678386 (shown after every 3 completed games via Android.showInterstitial())
- * - Rewarded Ad ID (Watch Save Life): ca-app-pub-8318388001860392/9842511553 (Android.watchSaveLife() / Android.watchRewardedAd())
+ * - Rewarded Ad ID (Watch Save Life): ca-app-pub-8318388001860392/6818862582 (Android.watchSaveLife() / Android.watchRewardedAd())
  * - App Open Ad ID: ca-app-pub-8318388001860392/5400703665 (loaded & shown in MainActivity.java)
  */
 export const ADMOB_CONFIG = {
   APP_ID_ANDROID: 'ca-app-pub-8318388001860392~8689085671',
   BANNER_AD_ID: 'ca-app-pub-8318388001860392/7839164745',
   INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/2642678386',
-  REWARDED_AD_ID: 'ca-app-pub-8318388001860392/9842511553',
+  REWARDED_AD_ID: 'ca-app-pub-8318388001860392/6818862582',
   APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/5400703665',
   INTERSTITIAL_FREQUENCY: 3, // Show after every 3 completed games
 } as const;
@@ -126,7 +126,7 @@ class AdMobManager {
   }
 
   /**
-   * Triggers native AdMob Rewarded Ad (ca-app-pub-8318388001860392/9842511553) via Android.watchSaveLife()
+   * Triggers native AdMob Rewarded Ad (ca-app-pub-8318388001860392/6818862582) via Android.watchSaveLife()
    * or Android.watchRewardedAd(rewardType) when inside the Android Studio APK.
    * Returns true if native bridge handled it; false if browser simulation modal should run.
    */

@@ -228,6 +228,10 @@ async function startServer() {
     res.json({ ok: true, battle });
   });
 
+  app.get('/privacy-policy.html', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy-policy.html'));
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

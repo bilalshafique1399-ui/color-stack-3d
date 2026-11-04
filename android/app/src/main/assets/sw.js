@@ -86,8 +86,11 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "pwa-192x192.png",
     "revision": "e0da7b808b8ea2cd3d7d9c534ec7e94a"
   }, {
+    "url": "privacy-policy.html",
+    "revision": "f8cbf4f6303830ed96b329c205f75fcd"
+  }, {
     "url": "index.html",
-    "revision": "ff6318ddf9af71243b6fd260925f630d"
+    "revision": "beae692cfc06b00ca440150f7f38ccbb"
   }, {
     "url": "icon.svg",
     "revision": "aa6b7419887d7c13129a0dd6a91c3f0f"
@@ -104,10 +107,10 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "assets/workbox-window.prod.es5-Bd17z0YL.js",
     "revision": null
   }, {
-    "url": "assets/index-DVAvcZnB.js",
+    "url": "assets/index-CSqBJZq6.js",
     "revision": null
   }, {
-    "url": "assets/index-DAp2ZvOC.css",
+    "url": "assets/index-BzYuyYhb.css",
     "revision": null
   }, {
     "url": "assets/aistudio/file_00000000ce8481fa8a5392f131b6186a_ad82b76a.png",
@@ -122,6 +125,9 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "favicon.ico",
     "revision": "6724a40dff3be34297633fe6fa547e6e"
   }, {
+    "url": "privacy-policy.html",
+    "revision": "f8cbf4f6303830ed96b329c205f75fcd"
+  }, {
     "url": "pwa-192x192.png",
     "revision": "e0da7b808b8ea2cd3d7d9c534ec7e94a"
   }, {
@@ -135,6 +141,8 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "revision": "970db26832cc136a8b69159c17b6fb18"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
+    denylist: [/^\/privacy-policy\.html/, /^\/api\//]
+  }));
 
 }));
