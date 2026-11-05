@@ -2,6 +2,17 @@ import { Capacitor } from '@capacitor/core';
 
 export type NativeRewardType = 'save_life' | 'life' | 'restart' | 'coins' | 'spin' | 'mystery';
 
+// REAL AdMob - Koi Preview / Fake Ad Nahi Hoga
+export const ADMOB_CONFIG = {
+  APP_ID: 'ca-app-pub-8318388001860392~8689085671',
+  APP_ID_ANDROID: 'ca-app-pub-8318388001860392~8689085671',
+  REWARDED_AD_ID: 'ca-app-pub-8318388001860392/4593766299',
+  BANNER_AD_ID: 'ca-app-pub-8318388001860392/7839164745',
+  INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/2642678386',
+  APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/5400703665',
+  INTERSTITIAL_FREQUENCY: 3, // Show after every 3 completed games
+} as const;
+
 interface AndroidAdBridge {
   watchSaveLife?: () => void;
   watchRewardedAd?: (rewardType: string) => void;
@@ -14,30 +25,19 @@ interface AndroidAdBridge {
 
 declare global {
   interface Window {
+    AndroidAdMob?: {
+      showRewarded: () => void;
+      showInterstitial: () => void;
+      showAppOpen?: () => void;
+    };
     Android?: AndroidAdBridge;
+    onRewardEarned?: () => void;
     giveLifeFromAd?: () => void;
     giveRewardFromAd?: (rewardType: string) => void;
     onNativeRewardedAdUnavailable?: (rewardType: string) => void;
     watchAdForLife?: () => void;
   }
 }
-
-/**
- * Final Live Google AdMob Ad Unit IDs:
- * - App ID: ca-app-pub-8318388001860392~8689085671
- * - Banner Ad ID: ca-app-pub-8318388001860392/7839164745 (native AdView at bottom in activity_main.xml)
- * - Interstitial Ad ID: ca-app-pub-8318388001860392/2642678386 (shown after every 3 completed games via Android.showInterstitial())
- * - Rewarded Ad ID (Watch Save Life): ca-app-pub-8318388001860392/4593766299 (Android.watchSaveLife() / Android.watchRewardedAd())
- * - App Open Ad ID: ca-app-pub-8318388001860392/5400703665 (loaded & shown in MainActivity.java)
- */
-export const ADMOB_CONFIG = {
-  APP_ID_ANDROID: 'ca-app-pub-8318388001860392~8689085671',
-  BANNER_AD_ID: 'ca-app-pub-8318388001860392/7839164745',
-  INTERSTITIAL_AD_ID: 'ca-app-pub-8318388001860392/2642678386',
-  REWARDED_AD_ID: 'ca-app-pub-8318388001860392/4593766299',
-  APP_OPEN_AD_ID: 'ca-app-pub-8318388001860392/5400703665',
-  INTERSTITIAL_FREQUENCY: 3, // Show after every 3 completed games
-} as const;
 
 const GAMES_PLAYED_STORAGE_KEY = 'gamesPlayed';
 
@@ -79,22 +79,29 @@ export function incrementGamesPlayed(): number {
   return gamesPlayed;
 }
 
-class AdMobManager {
+class AdMobService {
+  // Banner hamesha Native se aayega, Web me fake banner nahi banayenge
+  public init(): void {
+    console.log('Real AdMob Init:', ADMOB_CONFIG.APP_ID);
+  }
+
   public hasAndroidBridge(): boolean {
     return (
       typeof window !== 'undefined' &&
-      typeof window.Android !== 'undefined' &&
-      (typeof window.Android.watchSaveLife === 'function' ||
-        typeof window.Android.showInterstitial === 'function')
+      (typeof window.AndroidAdMob !== 'undefined' ||
+        (typeof window.Android !== 'undefined' &&
+          (typeof window.Android.watchSaveLife === 'function' ||
+            typeof window.Android.showInterstitial === 'function')))
     );
   }
 
   public hasNativeRewardedBridge(): boolean {
     return (
       typeof window !== 'undefined' &&
-      typeof window.Android !== 'undefined' &&
-      (typeof window.Android.watchRewardedAd === 'function' ||
-        typeof window.Android.watchSaveLife === 'function')
+      (typeof window.AndroidAdMob?.showRewarded === 'function' ||
+        (typeof window.Android !== 'undefined' &&
+          (typeof window.Android.watchRewardedAd === 'function' ||
+            typeof window.Android.watchSaveLife === 'function')))
     );
   }
 
@@ -106,15 +113,49 @@ class AdMobManager {
     return getGamesPlayed();
   }
 
+  // Rewarded Ad - Sirf Asli Ad
+  public showRewardedAd(onReward: () => void): Promise<boolean> {
+    return new Promise((resolve) => {
+      // Agar Android Native hai to usko bolo
+      if (typeof window !== 'undefined' && (window.AndroidAdMob?.showRewarded || window.Android?.watchSaveLife)) {
+        window.onRewardEarned = () => {
+          onReward();
+          resolve(true);
+        };
+        if (typeof window.AndroidAdMob?.showRewarded === 'function') {
+          window.AndroidAdMob.showRewarded();
+        } else if (typeof window.Android?.watchSaveLife === 'function') {
+          window.Android.watchSaveLife();
+        }
+        // 30 sec me ad na aaye to fail, fake preview kabhi nahi dikhayenge
+        setTimeout(() => resolve(false), 30000);
+        return;
+      }
+      // Web / Preview me hai to seedha bol do ad nahi hai, fake mat dikhao
+      console.log('Native AdMob not found - Real device me chalao');
+      resolve(false);
+    });
+  }
+
+  public showInterstitial(): void {
+    if (typeof window === 'undefined') return;
+    if (typeof window.AndroidAdMob?.showInterstitial === 'function') {
+      window.AndroidAdMob.showInterstitial();
+    } else if (typeof window.Android?.showInterstitial === 'function') {
+      window.Android.showInterstitial();
+    }
+  }
+
   public async initializeAndShowBanner(): Promise<void> {
-    if (this.hasAndroidBridge()) {
+    this.init();
+    if (typeof window !== 'undefined') {
       window.Android?.preloadInterstitial?.();
       window.Android?.preloadRewardedAd?.();
     }
   }
 
   public async preloadInterstitial(): Promise<boolean> {
-    if (this.hasAndroidBridge()) {
+    if (typeof window !== 'undefined') {
       try {
         window.Android?.preloadInterstitial?.();
         window.Android?.preloadRewardedAd?.();
@@ -126,29 +167,35 @@ class AdMobManager {
   }
 
   /**
-   * Triggers native AdMob Rewarded Ad (ca-app-pub-8318388001860392/4593766299) via Android.watchSaveLife()
-   * or Android.watchRewardedAd(rewardType) when inside the Android Studio APK.
-   * Returns true if native bridge handled it; false if browser simulation modal should run.
+   * Triggers native AdMob Rewarded Ad (ca-app-pub-8318388001860392/4593766299)
+   * via AndroidAdMob.showRewarded() or Android.watchSaveLife().
+   * Returns true if native bridge handled it; false if native bridge is not available.
    */
   public triggerRewardedAd(rewardType: NativeRewardType = 'save_life'): boolean {
     if (!this.hasNativeRewardedBridge()) {
       return false;
     }
     try {
-      if (
-        rewardType === 'save_life' &&
-        typeof window.Android?.watchSaveLife === 'function'
-      ) {
-        window.Android.watchSaveLife();
-        return true;
-      }
-      if (typeof window.Android?.watchRewardedAd === 'function') {
-        window.Android.watchRewardedAd(rewardType);
-        return true;
-      }
-      if (typeof window.Android?.watchSaveLife === 'function') {
-        window.Android.watchSaveLife();
-        return true;
+      if (typeof window !== 'undefined') {
+        if (typeof window.AndroidAdMob?.showRewarded === 'function') {
+          window.AndroidAdMob.showRewarded();
+          return true;
+        }
+        if (
+          rewardType === 'save_life' &&
+          typeof window.Android?.watchSaveLife === 'function'
+        ) {
+          window.Android.watchSaveLife();
+          return true;
+        }
+        if (typeof window.Android?.watchRewardedAd === 'function') {
+          window.Android.watchRewardedAd(rewardType);
+          return true;
+        }
+        if (typeof window.Android?.watchSaveLife === 'function') {
+          window.Android.watchSaveLife();
+          return true;
+        }
       }
     } catch (err) {
       console.warn('Native Rewarded Ad call failed:', err);
@@ -166,13 +213,13 @@ class AdMobManager {
   }> {
     if (this.hasAndroidBridge()) {
       try {
-        window.Android?.showInterstitial?.();
+        this.showInterstitial();
         return {
           triggeredInterstitial: true,
           showWebSimulation: false,
         };
       } catch (err) {
-        console.warn('Android.showInterstitial() failed:', err);
+        console.warn('showInterstitial() failed:', err);
         return {
           triggeredInterstitial: false,
           showWebSimulation: false,
@@ -180,16 +227,10 @@ class AdMobManager {
       }
     }
 
-    if (Capacitor.isNativePlatform()) {
-      return {
-        triggeredInterstitial: false,
-        showWebSimulation: false,
-      };
-    }
-
+    // REAL AdMob: Web preview me fake simulation ad nahi dikhayenge
     return {
-      triggeredInterstitial: true,
-      showWebSimulation: true,
+      triggeredInterstitial: false,
+      showWebSimulation: false,
     };
   }
 
@@ -239,4 +280,4 @@ class AdMobManager {
   }
 }
 
-export const admobService = new AdMobManager();
+export const admobService = new AdMobService();

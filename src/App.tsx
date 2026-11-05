@@ -56,7 +56,6 @@ import { soundEngine } from './audio/soundEngine';
 import { hapticEngine } from './audio/hapticEngine';
 import { ADMOB_CONFIG, admobService } from './services/admobService';
 import { AdMobBannerBar } from './components/AdMobBannerBar';
-import { AdMobInterstitialModal } from './components/AdMobInterstitialModal';
 import { ApkBuildModal } from './components/ApkBuildModal';
 import { LuckySpinWheelCard } from './components/LuckySpinWheelCard';
 import { MiniGamesArcade } from './components/MiniGamesArcade';
@@ -224,10 +223,6 @@ export default function App() {
   const [countdown9PM, setCountdown9PM] = useState<string>(() => getCountdownTo9PM());
 
   // Modals
-  const [adModalOpen, setAdModalOpen] = useState(false);
-  const [adRewardType, setAdRewardType] = useState<AdRewardAction>('life');
-  const [adSecondsLeft, setAdSecondsLeft] = useState(15);
-  const [showInterstitial, setShowInterstitial] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [selectedProofModal, setSelectedProofModal] = useState<ProofWallItem | null>(null);
@@ -408,6 +403,9 @@ export default function App() {
 
   // Register global window.giveLifeFromAd(), window.giveRewardFromAd(type), window.onNativeRewardedAdUnavailable(type), and window.watchAdForLife() for Android Studio WebView AdMob Rewarded bridge!
   useEffect(() => {
+    window.onRewardEarned = () => {
+      grantRewardByType('save_life', true);
+    };
     window.giveLifeFromAd = () => {
       grantRewardByType('save_life', true);
     };
@@ -422,35 +420,25 @@ export default function App() {
           : 'life';
       grantRewardByType(normalized, true);
     };
-    window.onNativeRewardedAdUnavailable = (rawType: string) => {
-      const normalized: AdRewardAction =
-        rawType === 'save_life' ||
-        rawType === 'coins' ||
-        rawType === 'restart' ||
-        rawType === 'spin' ||
-        rawType === 'mystery'
-          ? rawType
-          : 'life';
-      setAdRewardType(normalized);
-      setAdSecondsLeft(15);
-      setAdModalOpen(true);
+    window.onNativeRewardedAdUnavailable = (_rawType: string) => {
+      showToast('AdMob ad is loading. Please try again in 3 seconds.');
     };
     window.watchAdForLife = () => {
       if (admobService.triggerRewardedAd('save_life')) {
         return;
       }
-      setAdRewardType('save_life');
-      setAdSecondsLeft(15);
-      setAdModalOpen(true);
+      showToast('AdMob is active on Android APK. Life Saved!');
+      grantRewardByType('save_life', false);
     };
 
     return () => {
+      delete window.onRewardEarned;
       delete window.giveLifeFromAd;
       delete window.giveRewardFromAd;
       delete window.onNativeRewardedAdUnavailable;
       delete window.watchAdForLife;
     };
-  }, [grantRewardByType]);
+  }, [grantRewardByType, showToast]);
 
   // Capture ?code= or ?ref= invite parameter & Offline Sleep Vault welcome toast on boot
   useEffect(() => {
@@ -557,21 +545,6 @@ export default function App() {
     };
   }, []);
 
-  // 15-second Sponsored Ad Countdown (Web fallback)
-  useEffect(() => {
-    if (!adModalOpen) return;
-    setAdSecondsLeft(15);
-    const timer = window.setInterval(() => {
-      setAdSecondsLeft((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [adModalOpen]);
 
   // Sync equipped 3D Cube Skin to live engine
   useEffect(() => {
@@ -656,11 +629,7 @@ export default function App() {
 
         setGameNotice('Game Over! Watch an Ad for +1 Life to Restart or use 10 Coins.');
 
-        void admobService.gameOver(vipNoAds).then((adRes) => {
-          if (adRes.showWebSimulation) {
-            setShowInterstitial(true);
-          }
-        });
+        admobService.gameOver(vipNoAds);
       },
     });
 
@@ -683,8 +652,6 @@ export default function App() {
         return;
       }
       if (
-        adModalOpen ||
-        showInterstitial ||
         showApkModal ||
         showPrivacyModal ||
         selectedProofModal
@@ -715,8 +682,6 @@ export default function App() {
   }, [
     activePage,
     gameMode,
-    adModalOpen,
-    showInterstitial,
     showApkModal,
     showPrivacyModal,
     selectedProofModal,
@@ -732,18 +697,19 @@ export default function App() {
         return;
       }
 
-      // Inside Android Studio APK: call real AdMob Rewarded Ad (ca-app-pub-8318388001860392/4593766299)!
-      if (admobService.triggerRewardedAd(type)) {
+      // Inside Android APK: call REAL AdMob Rewarded Ad!
+      if (typeof window !== 'undefined' && (window.AndroidAdMob || window.Android)) {
+        void admobService.showRewardedAd(() => {
+          grantRewardByType(type, true);
+        });
         return;
       }
 
-      // In Web Browser preview: show 15-second Sponsored Ad simulation modal
-      setAdRewardType(type);
-      setAdSecondsLeft(15);
-      setAdModalOpen(true);
-      void admobService.preloadInterstitial();
+      // Web Browser preview: Koi fake preview ad nahi hoga
+      showToast('Real AdMob active on Android APK. Reward granted!');
+      grantRewardByType(type, false);
     },
-    [grantRewardByType],
+    [grantRewardByType, showToast],
   );
 
   const playGame = useCallback(() => {
@@ -783,12 +749,6 @@ export default function App() {
     showToast(`-${RESTART_COIN_COST} Coins used — Game Restarted!`);
     engineRef.current?.startNewGame();
   }, [showToast]);
-
-  const finishAd = useCallback(() => {
-    if (adSecondsLeft > 0) return;
-    setAdModalOpen(false);
-    grantRewardByType(adRewardType, false);
-  }, [adRewardType, adSecondsLeft, grantRewardByType]);
 
   // Daily Login Bonus Claim
   const handleClaimDailyLogin = () => {
@@ -3291,53 +3251,6 @@ export default function App() {
         <AdMobBannerBar vipZeroAds={vipClubActive} />
       </footer>
 
-      {/* =================================================================== */}
-      {/* 15-SECOND SPONSORED REWARD VIDEO MODAL (WEB / OFFLINE FALLBACK)     */}
-      {/* =================================================================== */}
-      {adModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Sponsored Reward Video"
-        >
-          <div className="w-full max-w-[420px] rounded-[18px] bg-[#1C214E] p-4 shadow-2xl">
-            <div className="rounded-xl bg-black p-5 text-center" data-ad-unit-id={ADMOB_CONFIG.REWARDED_AD_ID}>
-              <h2 className="font-display text-xl font-extrabold text-white">
-                Sponsored Reward Video
-              </h2>
-              <p className="mt-2 text-sm text-slate-200">
-                {adSecondsLeft > 0
-                  ? 'Watch the full sponsored video to unlock your reward...'
-                  : 'Reward Unlocked! Tap below to claim'}
-              </p>
-              <div className="my-3 font-display text-5xl font-black text-[#00D68F] tabular-nums">
-                {adSecondsLeft}
-              </div>
-              <p className="text-xs text-[#bbb]">
-                Reward:{' '}
-                {adRewardType === 'coins'
-                  ? `+${VIDEO_AD_REWARD_COINS * rewardMult} Coins`
-                  : adRewardType === 'spin'
-                    ? '+1 Extra Lucky Spin'
-                    : adRewardType === 'mystery'
-                      ? 'Instant Mystery Lucky Box'
-                      : adRewardType === 'save_life'
-                        ? 'Save Life & Continue Tower'
-                        : '+1 Life (Watch Save Life)'}
-              </p>
-              <button
-                type="button"
-                disabled={adSecondsLeft > 0}
-                onClick={finishAd}
-                className="mt-4 min-h-[42px] w-full whitespace-nowrap rounded-[10px] bg-[#00D68F] px-4 py-2.5 text-sm font-extrabold text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {adSecondsLeft > 0 ? `Wait ${adSecondsLeft}s...` : 'Claim Reward'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =================================================================== */}
       {/* IN-APP PRIVACY POLICY MODAL                                         */}
@@ -3464,14 +3377,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Every-3-Game-Overs Web Interstitial Simulation */}
-      <AdMobInterstitialModal
-        isOpen={showInterstitial}
-        onClose={() => {
-          setShowInterstitial(false);
-          admobService.handleWebInterstitialDismissed();
-        }}
-      />
 
       {/* Android APK Project Download Modal */}
       <ApkBuildModal isOpen={showApkModal} onClose={() => setShowApkModal(false)} />

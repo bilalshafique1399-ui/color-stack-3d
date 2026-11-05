@@ -5,8 +5,8 @@
     <string name="package_name">com.colorstack3d.game</string>
     <string name="custom_url_scheme">com.colorstack3d.game</string>
     <string name="admob_app_id">ca-app-pub-8318388001860392~8689085671</string>
+    <string name="admob_rewarded_id">ca-app-pub-8318388001860392/4593766299</string>
     <string name="admob_banner_id">ca-app-pub-8318388001860392/7839164745</string>
     <string name="admob_interstitial_id">ca-app-pub-8318388001860392/2642678386</string>
-    <string name="admob_rewarded_id">ca-app-pub-8318388001860392/4593766299</string>
     <string name="admob_app_open_id">ca-app-pub-8318388001860392/5400703665</string>
 </resources>

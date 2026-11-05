@@ -90,7 +90,7 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "revision": "f8cbf4f6303830ed96b329c205f75fcd"
   }, {
     "url": "index.html",
-    "revision": "8a2ba7a20fe2ad2e5b63b712b6811f5d"
+    "revision": "37d176d6785d26bf6ee12022a7d454db"
   }, {
     "url": "icon.svg",
     "revision": "aa6b7419887d7c13129a0dd6a91c3f0f"
@@ -110,7 +110,7 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "assets/index-D7QIGRL5.css",
     "revision": null
   }, {
-    "url": "assets/index-C1Ah3InT.js",
+    "url": "assets/index-C5b-cP3t.js",
     "revision": null
   }, {
     "url": "assets/aistudio/file_00000000ce8481fa8a5392f131b6186a_ad82b76a.png",

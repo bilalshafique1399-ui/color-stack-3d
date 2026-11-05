@@ -1,5 +1,5 @@
 {
-  "summary": "Android MainActivity integrating all 4 updated live Google AdMob unit IDs (Banner 7839164745, Interstitial 2642678386, Rewarded Watch Save Life 9842511553, App Open 5400703665) with proper SDK initialization sequencing, fullscreen ad collision protection, auto-retry, and WebView JS bridge.",
-  "updatedAt": "2026-11-04T06:31:33.647996766Z",
+  "summary": "Updated MainActivity.java artifact with dual Android/AndroidAdMob bridge, showRewarded, showAppOpen, and window.onRewardEarned evaluation",
+  "updatedAt": "2026-11-05T13:14:56.736181974Z",
   "userFacing": true
 }

@@ -64,7 +64,13 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         adView = findViewById(R.id.bannerAd);
+        if (adView == null) {
+            adView = findViewById(R.id.adView);
+        }
         wv = findViewById(R.id.gameWebView);
+        if (wv == null) {
+            wv = findViewById(R.id.webView);
+        }
 
         setupWebView();
 
@@ -153,6 +159,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         wv.addJavascriptInterface(new WebAppAdBridge(), "Android");
+        wv.addJavascriptInterface(new WebAppAdBridge(), "AndroidAdMob");
         wv.loadUrl("https://appassets.androidplatform.net/index.html");
     }
 
@@ -348,39 +355,37 @@ public class MainActivity extends AppCompatActivity {
                 ).show();
 
                 if (wv != null) {
-                    if ("life".equals(safeType) || "save_life".equals(safeType)) {
-                        wv.evaluateJavascript(
-                            "if(window.giveRewardFromAd){window.giveRewardFromAd('" + safeType + "');}else if(window.giveLifeFromAd){window.giveLifeFromAd();}",
-                            null
-                        );
-                    } else {
-                        wv.evaluateJavascript(
-                            "if(window.giveRewardFromAd){window.giveRewardFromAd('" + safeType + "');}else if(window.giveLifeFromAd){window.giveLifeFromAd();}",
-                            null
-                        );
-                    }
+                    wv.evaluateJavascript(
+                        "window.onRewardEarned && window.onRewardEarned(); if(window.giveRewardFromAd){window.giveRewardFromAd('" + safeType + "');}else if(window.giveLifeFromAd){window.giveLifeFromAd();}",
+                        null
+                    );
                 }
                 loadRewardedAd();
             });
         } else {
-            // Preload fresh Rewarded Ad and gracefully notify WebView so user is never stuck if AdMob has temporary NO_FILL
+            // Preload fresh Rewarded Ad and notify user
+            Toast.makeText(MainActivity.this, "Ad load ho raha hai, dobara try karo", Toast.LENGTH_SHORT).show();
             loadRewardedAd();
             if (wv != null) {
                 wv.evaluateJavascript(
                     "if(window.onNativeRewardedAdUnavailable){window.onNativeRewardedAdUnavailable('" + safeType + "');}",
                     null
                 );
-            } else {
-                Toast.makeText(
-                    MainActivity.this,
-                    "Rewarded Ad loading, please try in 2 seconds...",
-                    Toast.LENGTH_SHORT
-                ).show();
             }
         }
     }
 
     public class WebAppAdBridge {
+        @JavascriptInterface
+        public void showRewarded() {
+            runOnUiThread(() -> MainActivity.this.showRewardedAd("save_life"));
+        }
+
+        @JavascriptInterface
+        public void showAppOpen() {
+            runOnUiThread(MainActivity.this::showAppOpenAdIfAvailable);
+        }
+
         @JavascriptInterface
         public void watchSaveLife() {
             runOnUiThread(() -> MainActivity.this.showRewardedAd("save_life"));
