@@ -19,17 +19,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Fix gradlew missing problem
         run: |
           ls -la
           if [ -f gradlew ]; then
             chmod +x gradlew
-            echo "gradlew mil gaya"
           else
-            echo "gradlew nahi mila, naya bana raha hun"
+            echo "gradlew nahi mila, bana raha hun"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq gradle
             gradle wrapper
             chmod +x gradlew
           fi
