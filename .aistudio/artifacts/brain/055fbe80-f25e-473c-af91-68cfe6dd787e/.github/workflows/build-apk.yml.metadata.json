@@ -1,5 +1,5 @@
 {
-  "summary": "GitHub Actions workflow (`Build APK`) configured to build web assets, compile the standalone Android SDK 34 + AdMob 22.6.0 Debug APK using Zulu JDK 17 and Gradle 8.7, and upload `ColorStack3D-APK-RealAds`.",
-  "updatedAt": "2026-11-03T17:05:09.946800230Z",
+  "summary": "GitHub Actions workflow to automatically build both Color-Stack-APK (debug apk for direct installation on phones) and ColorStack3D-AAB (bundle for Google Play Console) with Node 22, JDK 17, and Android Gradle Plugin 8.5.2.",
+  "updatedAt": "2026-11-05T10:03:09.654951907Z",
   "userFacing": true
 }

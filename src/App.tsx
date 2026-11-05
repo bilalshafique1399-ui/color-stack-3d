@@ -252,6 +252,7 @@ export default function App() {
   const [mysteryMsg, setMysteryMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [claim6hMsg, setClaim6hMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [dailyBonusMsg, setDailyBonusMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [isClaimingDailyBonus, setIsClaimingDailyBonus] = useState(false);
   const [tournamentMsg, setTournamentMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [skinMsg, setSkinMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -731,7 +732,7 @@ export default function App() {
         return;
       }
 
-      // Inside Android Studio APK: call real AdMob Rewarded Ad (ca-app-pub-8318388001860392/6818862582)!
+      // Inside Android Studio APK: call real AdMob Rewarded Ad (ca-app-pub-8318388001860392/4593766299)!
       if (admobService.triggerRewardedAd(type)) {
         return;
       }
@@ -796,6 +797,8 @@ export default function App() {
     setDailyBonusMsg({ ok: res.ok, text: res.message });
     if (res.ok) {
       soundEngine.playRewardFanfare();
+      setIsClaimingDailyBonus(true);
+      window.setTimeout(() => setIsClaimingDailyBonus(false), 2400);
       setEarnState(res.nextState);
       showToast(res.message);
     }
@@ -1274,10 +1277,11 @@ export default function App() {
                 <span className="text-[#00D68F]">{earnState.coins.toLocaleString()}</span> • Lives{' '}
                 <span className="text-[#FF5A7A]">{earnState.lives}</span>
               </div>
-              <div className="shrink-0">
-                Best: <b className="text-[#FFCC00]">{earnState.best}</b> •{' '}
-                <span className="text-orange-300">
-                  {earnState.streakDays}d ({totalRunMultiplier}x)
+              <div className="shrink-0 flex items-center gap-1.5">
+                <span>Best: <b className="text-[#FFCC00]">{earnState.best}</b></span>
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[11px] font-extrabold text-orange-300">
+                  <Flame className="h-3 w-3 animate-flame-streak text-orange-400" />
+                  <span>{earnState.streakDays}d ({totalRunMultiplier}x)</span>
                 </span>
               </div>
             </div>
@@ -1665,17 +1669,38 @@ export default function App() {
                 />
 
                 {/* 7-Day Daily Login Bonus Calendar */}
-                <div className="rounded-2xl bg-[#1C214E] p-4">
+                <div
+                  className={`rounded-2xl border bg-[#1C214E] p-4 transition-all duration-300 ${
+                    isClaimingDailyBonus
+                      ? 'border-[#00D68F] shadow-[0_0_24px_rgba(0,214,143,0.35)]'
+                      : 'border-transparent'
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <h3 className="font-display text-base font-extrabold text-white">
-                        7-Day Daily Login Bonus
-                      </h3>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-display text-base font-extrabold text-white">
+                          7-Day Daily Login Bonus
+                        </h3>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-500/15 px-2 py-0.5 text-[10px] font-extrabold text-orange-300">
+                          <Flame className="h-3 w-3 animate-flame-streak text-orange-400" />
+                          <span>{earnState.streakDays}d Streak</span>
+                        </span>
+                      </div>
                       <p className="mt-0.5 text-xs text-[#bbb]">
                         Log in daily for escalating coin drops • Day 7 = {100 * rewardMult} Coins
                       </p>
                     </div>
-                    <Flame className="h-5 w-5 shrink-0 text-orange-400" />
+                    <div
+                      className={`relative flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/15 transition-transform ${
+                        isClaimingDailyBonus ? 'animate-claim-celebrate scale-110' : ''
+                      }`}
+                    >
+                      <Flame className="h-6 w-6 animate-flame-streak text-orange-400" />
+                      {isClaimingDailyBonus && (
+                        <Sparkles className="absolute -top-1 -right-1 h-4 w-4 animate-spin text-[#FFCC00]" />
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-7 gap-1.5 text-center tabular-nums">
@@ -1687,21 +1712,34 @@ export default function App() {
                         dayNum < activeDay ||
                         (isLoginBonusClaimedToday &&
                           ((activeDay === 1 && dayNum === 7) || dayNum === activeDay - 1));
+                      const isClaimJustNow = isClaimingDailyBonus && dayNum === (activeDay === 1 ? 7 : activeDay - 1);
                       const displayReward = baseCoins * rewardMult;
 
                       return (
                         <div
                           key={dayNum}
-                          className={`rounded-xl border p-2 ${
-                            isCurrentTarget
-                              ? 'border-[#00D68F] bg-[#00D68F]/15 text-white'
-                              : isDone
-                                ? 'border-[#00D68F]/40 bg-[#0F1226] text-[#00D68F]'
-                                : 'border-[#333866] bg-[#0F1226] text-[#bbb]'
+                          className={`relative overflow-hidden rounded-xl border p-2 transition-all duration-300 ${
+                            isClaimJustNow
+                              ? 'animate-claim-celebrate border-[#00D68F] bg-[#00D68F]/30 text-white shadow-[0_0_15px_rgba(0,214,143,0.6)]'
+                              : isCurrentTarget
+                                ? 'animate-streak-target border-[#00D68F] bg-[#00D68F]/20 text-white font-bold'
+                                : isDone
+                                  ? 'border-[#00D68F]/40 bg-[#0F1226] text-[#00D68F]'
+                                  : 'border-[#333866] bg-[#0F1226] text-[#bbb]'
                           }`}
                         >
-                          <div className="text-[10px] font-bold">D{dayNum}</div>
-                          <div className="mt-0.5 text-xs font-extrabold text-white">
+                          {isCurrentTarget && (
+                            <span className="absolute inset-x-0 top-0 h-0.5 streak-shimmer-bg" />
+                          )}
+                          <div className="flex items-center justify-center gap-0.5 text-[10px] font-bold">
+                            <span>D{dayNum}</span>
+                            {isDone && <Check className="h-2.5 w-2.5 text-[#00D68F]" />}
+                          </div>
+                          <div
+                            className={`mt-0.5 text-xs font-extrabold ${
+                              isCurrentTarget ? 'text-[#00D68F]' : isDone ? 'text-slate-200' : 'text-white'
+                            }`}
+                          >
                             +{displayReward}
                           </div>
                         </div>
@@ -1723,9 +1761,19 @@ export default function App() {
                     type="button"
                     disabled={isLoginBonusClaimedToday}
                     onClick={handleClaimDailyLogin}
-                    className="mt-3 flex min-h-[42px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-[#00D68F] px-4 py-2.5 text-xs font-extrabold text-black transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+                    className={`mt-3 flex min-h-[42px] w-full items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-4 py-2.5 text-xs font-extrabold transition sm:text-sm ${
+                      isLoginBonusClaimedToday
+                        ? 'bg-[#00D68F]/30 text-[#00D68F] cursor-not-allowed'
+                        : isClaimingDailyBonus
+                          ? 'animate-claim-celebrate bg-[#00D68F] text-black shadow-[0_0_20px_rgba(0,214,143,0.6)]'
+                          : 'bg-[#00D68F] text-black hover:brightness-105 active:scale-95'
+                    }`}
                   >
-                    <Gift className="h-4 w-4" />
+                    <Gift
+                      className={`h-4 w-4 ${
+                        !isLoginBonusClaimedToday ? 'animate-bounce' : ''
+                      }`}
+                    />
                     <span>
                       {isLoginBonusClaimedToday
                         ? 'Today’s Login Bonus Claimed'
@@ -1735,11 +1783,15 @@ export default function App() {
                     </span>
                   </button>
 
-                  <p className="mt-2.5 text-xs text-[#bbb] tabular-nums">
-                    Active Streak: <b className="text-white">{earnState.streakDays} Day(s)</b> • 3+
-                    Days = <b className="text-[#00D68F]">2x Run Coins</b> • 7+ Days ={' '}
-                    <b className="text-[#FFCC00]">3x Run Coins</b>
-                  </p>
+                  <div className="mt-2.5 flex items-center justify-between text-xs text-[#bbb] tabular-nums">
+                    <span className="flex items-center gap-1">
+                      <Flame className="h-3.5 w-3.5 animate-flame-streak text-orange-400" />
+                      <span>Streak: <b className="text-white">{earnState.streakDays}d</b></span>
+                    </span>
+                    <span>
+                      3d+ = <b className="text-[#00D68F]">2x</b> • 7d+ = <b className="text-[#FFCC00]">3x Coins</b>
+                    </span>
+                  </div>
                 </div>
               </>
             )}

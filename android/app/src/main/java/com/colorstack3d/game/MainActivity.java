@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     // Live Google AdMob Unit IDs (App ID in AndroidManifest.xml: ca-app-pub-8318388001860392~8689085671)
     private static final String BANNER_ID = "ca-app-pub-8318388001860392/7839164745";
     private static final String INTERSTITIAL_ID = "ca-app-pub-8318388001860392/2642678386";
-    private static final String REWARDED_ID = "ca-app-pub-8318388001860392/6818862582";
+    private static final String REWARDED_ID = "ca-app-pub-8318388001860392/4593766299";
     private static final String APP_OPEN_ID = "ca-app-pub-8318388001860392/5400703665";
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -100,7 +100,7 @@ public class MainActivity extends AppCompatActivity {
         // 2. Interstitial Ad Preload (ca-app-pub-8318388001860392/2642678386)
         loadInterstitial();
 
-        // 3. Rewarded Ad Preload - Watch Save Life (ca-app-pub-8318388001860392/6818862582)
+        // 3. Rewarded Ad Preload - Watch Save Life (ca-app-pub-8318388001860392/4593766299)
         loadRewardedAd();
 
         // 4. App Open Ad Preload & Cold-Start Show (ca-app-pub-8318388001860392/5400703665)
