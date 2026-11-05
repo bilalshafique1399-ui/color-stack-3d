@@ -13,11 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - name: Setup Java 8
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '8'
 
       - name: Fix gradlew missing problem
         run: |
@@ -28,7 +28,7 @@ jobs:
             echo "gradlew nahi mila, bana raha hun"
             sudo apt-get update -qq
             sudo apt-get install -y -qq gradle
-            gradle wrapper
+            gradle wrapper --gradle-version 4.4.1
             chmod +x gradlew
           fi
 
