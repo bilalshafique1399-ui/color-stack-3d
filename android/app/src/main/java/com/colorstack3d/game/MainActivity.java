@@ -64,13 +64,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         adView = findViewById(R.id.bannerAd);
-        if (adView == null) {
-            adView = findViewById(R.id.adView);
-        }
         wv = findViewById(R.id.gameWebView);
-        if (wv == null) {
-            wv = findViewById(R.id.webView);
-        }
 
         setupWebView();
 
