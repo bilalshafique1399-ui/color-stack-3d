@@ -6,17 +6,18 @@
     android:background="#0D1021">
 
     <WebView
-        android:id="@+id/gameWebView"
+        android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/bannerAd" />
+        android:layout_above="@+id/adView" />
 
     <com.google.android.gms.ads.AdView
-        android:id="@+id/bannerAd"
+        android:id="@+id/adView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
         ads:adSize="BANNER"
         ads:adUnitId="ca-app-pub-8318388001860392/7839164745" />
+
 </RelativeLayout>
